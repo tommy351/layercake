@@ -4,13 +4,13 @@ use std::collections::HashMap;
 use std::fs::File;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BuildConfig {
+pub struct Config {
   #[serde(skip_serializing_if = "HashMap::is_empty")]
-  pub steps: HashMap<String, BuildStep>,
+  pub build: HashMap<String, Build>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BuildStep {
+pub struct Build {
   pub from: String,
   pub image: Option<String>,
   pub scripts: Vec<BuildScript>,
@@ -35,8 +35,8 @@ pub enum BuildScript {
   Import { import: String },
 }
 
-pub fn load_config(path: String) -> Result<BuildConfig, Error> {
+pub fn load_config(path: String) -> Result<Config, Error> {
   let file = File::open(path)?;
-  let config: BuildConfig = serde_yaml::from_reader(file)?;
+  let config: Config = serde_yaml::from_reader(file)?;
   Ok(config)
 }

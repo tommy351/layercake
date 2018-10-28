@@ -1,13 +1,14 @@
-use config::{BuildConfig, BuildScript, BuildStep};
+use config::{Build, BuildScript, Config};
 use failure::{Error, Fail};
 use serde_derive::{Deserialize, Serialize};
 use slog::{debug, info, o, Logger};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use tar::Archive;
+use tempfile::{NamedTempFile, TempDir};
 
 #[derive(Debug, Fail)]
 enum BuildError {
@@ -20,21 +21,145 @@ struct DockerImageRepository {
   latest: String,
 }
 
-pub fn build(log: Logger, config: BuildConfig) -> Result<(), Error> {
+#[derive(Debug)]
+struct BuildContext<'a> {
+  name: String,
+  build: &'a Build,
+  dir: TempDir,
+  tag: String,
+  log: Logger,
+}
+
+pub fn build(log: Logger, config: Config) -> Result<(), Error> {
   info!(log, "Start building images");
 
-  for (name, step) in config.steps.iter() {
-    let tag = step.image.clone().unwrap_or(format!("layercake_{}", name));
-    let step_log = log.new(o!("step" => name.clone()));
+  let temp_dir = tempfile::Builder::new()
+    .prefix(".layercake-tmp-")
+    .tempdir_in(".")?;
 
-    info!(step_log, "Building the image");
-    build_image(&step_log, &step, &tag)?;
+  let builds = sort_builds(&config);
 
-    info!(step_log, "Saving the last layer");
-    save_last_layer(&step_log, &name, &tag)?;
+  for (name, build) in builds.iter() {
+    let ctx = BuildContext {
+      name: name.clone(),
+      build,
+      dir: TempDir::new_in(temp_dir.path())?,
+      tag: build.image.clone().unwrap_or(format!("layercake_{}", name)),
+      log: log.new(o!("name" => name.clone())),
+    };
+
+    info!(ctx.log, "Building the image");
+    build_image(&ctx)?;
+
+    info!(ctx.log, "Saving the last layer");
+    save_last_layer(&ctx)?;
   }
 
+  info!(log, "Build successfully");
   Ok(())
+}
+
+fn sort_builds(config: &Config) -> Vec<(String, &Build)> {
+  let mut names = Vec::new();
+  let mut dep_map = (&config.build)
+    .into_iter()
+    .filter_map(|(name, build)| {
+      let deps = pick_build_deps(&build);
+
+      if deps.is_empty() {
+        names.push(name);
+        None
+      } else {
+        Some((name, deps))
+      }
+    })
+    .collect::<HashMap<_, _>>();
+
+  while !dep_map.is_empty() {
+    dep_map = dep_map
+      .into_iter()
+      .filter_map(|(name, deps)| {
+        let new_deps = deps
+          .into_iter()
+          .filter(|dep| !names.contains(&dep))
+          .collect::<Vec<_>>();
+
+        if new_deps.is_empty() {
+          names.push(name);
+          None
+        } else {
+          Some((name, new_deps))
+        }
+      })
+      .collect();
+  }
+
+  names
+    .into_iter()
+    .map(|name| (name.clone(), config.build.get(name).unwrap()))
+    .collect::<Vec<_>>()
+}
+
+fn pick_build_deps(build: &Build) -> Vec<String> {
+  (&build.scripts)
+    .into_iter()
+    .filter_map(|ref script| match script {
+      BuildScript::Import { import } => Some(import.clone()),
+      _ => None,
+    })
+    .collect::<Vec<_>>()
+}
+
+fn build_image(ctx: &BuildContext) -> Result<(), Error> {
+  let mut temp_file = NamedTempFile::new_in(ctx.dir.path())?;
+
+  {
+    let file = temp_file.as_file_mut();
+
+    writeln!(file, "FROM {}", ctx.build.from)?;
+
+    for script in ctx.build.scripts.iter() {
+      let line = match script {
+        BuildScript::Run { run } => format!("RUN {}", run),
+        BuildScript::Arg { arg } => format!("ARG {}", arg),
+        BuildScript::WorkDir { workdir } => format!("WORKDIR {}", workdir),
+        BuildScript::Env { env } => format!("ENV {}", env),
+        BuildScript::Label { label } => format!("LABEL {}", label),
+        BuildScript::Expose { expose } => format!("EXPOSE {}", expose),
+        BuildScript::Add { add } => format!("ADD {}", add),
+        BuildScript::Copy { copy } => format!("COPY {}", copy),
+        BuildScript::Entrypoint { entrypoint } => format!("ENTRYPOINT {}", entrypoint),
+        BuildScript::Volume { volume } => format!("VOLUME {}", volume),
+        BuildScript::User { user } => format!("USER {}", user),
+        BuildScript::Import { import } => format!(
+          "ADD {}/{}.tar /",
+          relative_path(ctx.dir.path().parent().unwrap())?
+            .to_str()
+            .unwrap(),
+          import
+        ),
+      };
+
+      write!(file, "{}\n", line)?;
+    }
+
+    file.sync_all()?;
+  }
+
+  let mut cmd = Command::new("docker");
+
+  cmd.arg("build");
+  cmd.arg("-t").arg(&ctx.tag);
+  cmd.arg("-f").arg(temp_file.path());
+
+  for (k, v) in ctx.build.args.iter() {
+    cmd.arg("--build-arg").arg(format!("{}={}", k, v));
+  }
+
+  cmd.arg(".");
+
+  let mut child = cmd.spawn()?;
+  wait_spawn(&mut child)
 }
 
 fn wait_spawn(child: &mut Child) -> Result<(), Error> {
@@ -49,111 +174,40 @@ fn wait_spawn(child: &mut Child) -> Result<(), Error> {
   }
 }
 
-fn build_image(log: &Logger, step: &BuildStep, tag: &String) -> Result<(), Error> {
-  let mut cmd = Command::new("docker");
-
-  cmd.stdin(Stdio::piped());
-
-  cmd.arg("build");
-  cmd.arg("-t");
-  cmd.arg(tag);
-  cmd.args(&["-f", "-"]);
-
-  for (k, v) in step.args.iter() {
-    cmd.arg("--build-arg");
-    cmd.arg(format!("{}={}", k, v));
-  }
-
-  cmd.arg(".");
-
-  let mut child = cmd.spawn()?;
-
-  debug!(log, "Writing Dockerfile");
-  write_docker_file(&mut child, step)?;
-
-  wait_spawn(&mut child)
-}
-
-fn write_docker_file(child: &mut Child, step: &BuildStep) -> Result<(), Error> {
-  let stdin = child.stdin.as_mut().unwrap();
-
-  stdin.write(format!("FROM {}\n", step.from).as_bytes())?;
-
-  for script in step.scripts.iter() {
-    match script {
-      BuildScript::Run { run } => stdin.write(format!("RUN {}\n", run).as_bytes())?,
-      BuildScript::Arg { arg } => stdin.write(format!("ARG {}\n", arg).as_bytes())?,
-      BuildScript::WorkDir { workdir } => {
-        stdin.write(format!("WORKDIR {}\n", workdir).as_bytes())?
-      }
-      BuildScript::Env { env } => stdin.write(format!("ENV {}\n", env).as_bytes())?,
-      BuildScript::Label { label } => stdin.write(format!("LABEL {}\n", label).as_bytes())?,
-      BuildScript::Expose { expose } => stdin.write(format!("EXPOSE {}\n", expose).as_bytes())?,
-      BuildScript::Add { add } => stdin.write(format!("ADD {}\n", add).as_bytes())?,
-      BuildScript::Copy { copy } => stdin.write(format!("COPY {}\n", copy).as_bytes())?,
-      BuildScript::Entrypoint { entrypoint } => {
-        stdin.write(format!("ENTRYPOINT {}\n", entrypoint).as_bytes())?
-      }
-      BuildScript::Volume { volume } => stdin.write(format!("VOLUME {}\n", volume).as_bytes())?,
-      BuildScript::User { user } => stdin.write(format!("USER {}\n", user).as_bytes())?,
-      BuildScript::Import { import } => {
-        stdin.write(format!("ADD .layercake-tmp/{}.tar /\n", import).as_bytes())?
-      }
-    };
-  }
-
-  Ok(())
-}
-
-fn save_last_layer(log: &Logger, name: &String, tag: &String) -> Result<(), Error> {
-  let temp_dir = Path::new(".layercake-tmp");
-  let image_dir = temp_dir.join(name);
-
-  debug!(log, "Creating a temporary directory"; "path" => image_dir.to_str());
-  fs::create_dir_all(&image_dir)?;
-
+fn save_last_layer(ctx: &BuildContext) -> Result<(), Error> {
   let mut child = Command::new("docker")
     .arg("save")
-    .arg(tag)
+    .arg(&ctx.tag)
     .stdout(Stdio::piped())
     .spawn()?;
 
-  debug!(log, "Unpacking the image"; "path" => image_dir.to_str());
-  unpack_image(&mut child, &image_dir)?;
+  {
+    debug!(ctx.log, "Unpacking the image");
+    let stdout = child.stdout.as_mut().unwrap();
+    let mut archive = Archive::new(stdout);
+    archive.unpack(ctx.dir.path())?;
+  }
 
-  let last_layer = get_last_layer(&image_dir)?;
-  let src = image_dir.join(last_layer).join("layer.tar");
-  let dst = temp_dir.join(format!("{}.tar", name));
-  debug!(log, "Moving the layer"; "from" => src.to_str(), "to" => dst.to_str());
+  let repo_path = ctx.dir.path().join("repositories");
+  let file = fs::File::open(repo_path)?;
+  let repo_map: HashMap<String, DockerImageRepository> = serde_json::from_reader(file)?;
+  let (_, repo) = repo_map.iter().next().unwrap();
+  let src = ctx.dir.path().join(&repo.latest).join("layer.tar");
+  let dst = ctx
+    .dir
+    .path()
+    .parent()
+    .unwrap()
+    .join(format!("{}.tar", ctx.name));
+
+  debug!(ctx.log, "Moving the layer");
   fs::rename(src, dst)?;
-
-  debug!(log, "Cleanup the temporary directory"; "path" => image_dir.to_str());
-  fs::remove_dir_all(image_dir)?;
 
   wait_spawn(&mut child)
 }
 
-fn unpack_image<P: AsRef<Path>>(child: &mut Child, path: P) -> Result<(), Error> {
-  let stdout = child.stdout.as_mut().unwrap();
-  let mut archive = Archive::new(stdout);
-  archive.unpack(path)?;
-  Ok(())
-}
-
-fn get_last_layer(path: &PathBuf) -> Result<String, Error> {
-  let repo_path = Path::new(path).join("repositories");
-  let file = fs::File::open(repo_path)?;
-  let repo_map: HashMap<String, DockerImageRepository> = serde_json::from_reader(file)?;
-  let (_, repo) = repo_map.iter().next().unwrap();
-  Ok(repo.latest.clone())
-}
-
-fn pick_step_deps(scripts: Vec<BuildScript>) -> Vec<String> {
-  scripts
-    .into_iter()
-    .filter_map(|script| match script {
-      BuildScript::Import { import } => Some(import.clone()),
-      _ => None,
-    })
-    .collect::<Vec<_>>()
+fn relative_path(path: &Path) -> Result<&Path, Error> {
+  let pwd = std::env::current_dir()?;
+  let output = path.strip_prefix(pwd)?;
+  Ok(output)
 }

@@ -7,9 +7,6 @@ use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg
 use layercake::build::build;
 use layercake::config::load_config;
 use slog::Logger;
-use sloggers::terminal::{Destination, TerminalLoggerBuilder};
-use sloggers::types::Severity;
-use sloggers::Build;
 
 fn main() {
     let args = App::new(crate_name!())
@@ -27,13 +24,7 @@ fn main() {
         )
         .get_matches();
 
-    let mut builder = TerminalLoggerBuilder::new();
-    builder.level(Severity::Debug);
-    builder.destination(Destination::Stderr);
-
-    let log = builder.build().unwrap();
-
-    match run(log.clone(), args) {
+    match run(args) {
         Ok(_) => {}
         Err(e) => {
             eprintln!("error: {:?}", e);
@@ -42,8 +33,25 @@ fn main() {
     }
 }
 
-fn run(log: Logger, args: ArgMatches) -> Result<(), failure::Error> {
-    let config_path = args.value_of("config").unwrap();
+fn create_logger() -> Logger {
+    use sloggers::terminal::{Destination, TerminalLoggerBuilder};
+    use sloggers::types::{Format, Severity, SourceLocation};
+    use sloggers::Build;
+
+    let mut builder = TerminalLoggerBuilder::new();
+    builder.format(Format::Compact);
+    builder.level(Severity::Debug);
+    builder.destination(Destination::Stderr);
+    builder.source_location(SourceLocation::None);
+
+    builder.build().expect("failed to build a logger")
+}
+
+fn run(args: ArgMatches) -> Result<(), failure::Error> {
+    let log = create_logger();
+    let config_path = args
+        .value_of("config")
+        .expect("failed to get config from arguments");
     let config = load_config(config_path.to_string())?;
     build(log, config)
 }

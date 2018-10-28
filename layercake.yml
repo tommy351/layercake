@@ -1,4 +1,4 @@
-steps:
+build:
   mozjpeg:
     from: debian:stretch
     scripts:
