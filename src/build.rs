@@ -34,7 +34,8 @@ pub fn build(log: Logger, config: Config) -> Result<(), Error> {
   info!(log, "Start building images");
 
   let temp_dir = tempfile::Builder::new()
-    .prefix(".layercake-tmp-")
+    .prefix(".layercake-tmp")
+    .rand_bytes(0)
     .tempdir_in(".")?;
 
   let builds = sort_builds(&config);
