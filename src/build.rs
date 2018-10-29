@@ -40,7 +40,7 @@ pub fn build(log: Logger, config: Config) -> Result<(), Error> {
 
   let builds = sort_builds(&config);
 
-  for (name, build) in builds.iter() {
+  for (name, build) in builds {
     let ctx = BuildContext {
       name: name.clone(),
       build,
@@ -61,38 +61,28 @@ pub fn build(log: Logger, config: Config) -> Result<(), Error> {
 }
 
 fn sort_builds(config: &Config) -> Vec<(String, &Build)> {
-  let mut names = Vec::new();
+  let mut names: Vec<&String> = Vec::new();
   let mut dep_map = (&config.build)
     .into_iter()
-    .filter_map(|(name, build)| {
-      let deps = pick_build_deps(&build);
-
-      if deps.is_empty() {
-        names.push(name);
-        None
-      } else {
-        Some((name, deps))
-      }
-    })
+    .map(|(name, build)| (name, pick_build_deps(&build)))
     .collect::<HashMap<_, _>>();
 
   while !dep_map.is_empty() {
-    dep_map = dep_map
-      .into_iter()
-      .filter_map(|(name, deps)| {
-        let new_deps = deps
-          .into_iter()
-          .filter(|dep| !names.contains(&dep))
-          .collect::<Vec<_>>();
+    for (name, deps) in &mut dep_map {
+      *deps = deps
+        .into_iter()
+        .filter(|dep| names.contains(&&**dep))
+        .map(|dep| dep.clone())
+        .collect();
 
-        if new_deps.is_empty() {
-          names.push(name);
-          None
-        } else {
-          Some((name, new_deps))
-        }
-      })
-      .collect();
+      if deps.is_empty() {
+        names.push(*name);
+      }
+    }
+
+    for name in &names {
+      dep_map.remove(name);
+    }
   }
 
   names
@@ -119,7 +109,7 @@ fn build_image(ctx: &BuildContext) -> Result<(), Error> {
 
     writeln!(file, "FROM {}", ctx.build.from)?;
 
-    for script in ctx.build.scripts.iter() {
+    for script in &ctx.build.scripts {
       let line = match script {
         BuildScript::Run { run } => format!("RUN {}", run),
         BuildScript::Arg { arg } => format!("ARG {}", arg),
@@ -153,7 +143,7 @@ fn build_image(ctx: &BuildContext) -> Result<(), Error> {
   cmd.arg("-t").arg(&ctx.tag);
   cmd.arg("-f").arg(temp_file.path());
 
-  for (k, v) in ctx.build.args.iter() {
+  for (k, v) in &ctx.build.args {
     cmd.arg("--build-arg").arg(format!("{}={}", k, v));
   }
 
