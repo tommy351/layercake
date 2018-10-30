@@ -39,7 +39,7 @@ fn create_logger() -> Logger {
     use sloggers::Build;
 
     let mut builder = TerminalLoggerBuilder::new();
-    builder.format(Format::Compact);
+    builder.format(Format::Full);
     builder.level(Severity::Debug);
     builder.destination(Destination::Stderr);
     builder.source_location(SourceLocation::None);

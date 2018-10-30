@@ -68,21 +68,22 @@ fn sort_builds(config: &Config) -> Vec<(String, &Build)> {
     .collect::<HashMap<_, _>>();
 
   while !dep_map.is_empty() {
-    for (name, deps) in &mut dep_map {
-      *deps = deps
-        .into_iter()
-        .filter(|dep| names.contains(&&**dep))
-        .map(|dep| dep.clone())
-        .collect();
+    dep_map = dep_map
+      .into_iter()
+      .filter_map(|(name, deps)| {
+        let new_deps = deps
+          .into_iter()
+          .filter(|dep| !names.contains(&dep))
+          .collect::<Vec<_>>();
 
-      if deps.is_empty() {
-        names.push(*name);
-      }
-    }
-
-    for name in &names {
-      dep_map.remove(name);
-    }
+        if new_deps.is_empty() {
+          names.push(name);
+          None
+        } else {
+          Some((name, new_deps))
+        }
+      })
+      .collect();
   }
 
   names
