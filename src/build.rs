@@ -39,6 +39,7 @@ pub struct Builder {
     pub force_rm: bool,
     pub pull: bool,
     pub no_cache: bool,
+    pub dry_run: bool,
 }
 
 impl Builder {
@@ -61,11 +62,16 @@ impl Builder {
                 log: self.log.new(o!("name" => name.clone())),
             };
 
-            info!(ctx.log, "Building the image");
-            self.build_image(&ctx)?;
+            if self.dry_run {
+                info!(ctx.log, "Dockerfile");
+                self.write_docker_file(&ctx, &mut std::io::stdout())?;
+            } else {
+                info!(ctx.log, "Building the image");
+                self.build_image(&ctx)?;
 
-            info!(ctx.log, "Saving the last layer");
-            self.save_last_layer(&ctx)?;
+                info!(ctx.log, "Saving the last layer");
+                self.save_last_layer(&ctx)?;
+            }
         }
 
         info!(self.log, "Build successfully");
@@ -116,54 +122,19 @@ impl Builder {
     }
 
     fn build_image(&self, ctx: &BuildContext) -> Result<(), Error> {
-        let mut temp_file = NamedTempFile::new_in(ctx.dir.path())?;
+        let mut file = NamedTempFile::new_in(ctx.dir.path())?;
 
         {
-            let file = temp_file.as_file_mut();
-
-            writeln!(file, "FROM {}", ctx.build.from)?;
-
-            for script in &ctx.build.scripts {
-                let line = match script {
-                    BuildScript::Run { run } => format!("RUN {}", run),
-                    BuildScript::Arg { arg } => format!("ARG {}", arg),
-                    BuildScript::WorkDir { workdir } => format!("WORKDIR {}", workdir),
-                    BuildScript::Env { env } => format!("ENV {}", env),
-                    BuildScript::Label { label } => format!("LABEL {}", label),
-                    BuildScript::Expose { expose } => format!("EXPOSE {}", expose),
-                    BuildScript::Add { add } => format!("ADD {}", add),
-                    BuildScript::Copy { copy } => format!("COPY {}", copy),
-                    BuildScript::Entrypoint { entrypoint } => format!("ENTRYPOINT {}", entrypoint),
-                    BuildScript::Volume { volume } => format!("VOLUME {}", volume),
-                    BuildScript::User { user } => format!("USER {}", user),
-                    BuildScript::Cmd { cmd } => format!("CMD {}", cmd),
-                    BuildScript::Maintainer { maintainer } => format!("MAINTAINER {}", maintainer),
-                    BuildScript::OnBuild { onbuild } => format!("ONBUILD {}", onbuild),
-                    BuildScript::StopSignal { stopsignal } => format!("STOPSIGNAL {}", stopsignal),
-                    BuildScript::HealthCheck { healthcheck } => {
-                        format!("HEALTHCHECK {}", healthcheck)
-                    }
-                    BuildScript::Shell { shell } => format!("SHELL {}", shell),
-                    BuildScript::Import { import } => format!(
-                        "ADD {}/{}.tar /",
-                        relative_path(ctx.dir.path().parent().unwrap())?
-                            .to_str()
-                            .unwrap(),
-                        import
-                    ),
-                };
-
-                write!(file, "{}\n", line)?;
-            }
-
-            file.sync_all()?;
+            let mut f = file.as_file_mut();
+            self.write_docker_file(ctx, &mut f)?;
+            f.sync_all()?;
         }
 
         let mut cmd = Command::new("docker");
 
         cmd.arg("build");
         cmd.arg("-t").arg(&ctx.tag);
-        cmd.arg("-f").arg(temp_file.path());
+        cmd.arg("-f").arg(file.path());
 
         for arg in &self.args {
             cmd.arg("--build-arg").arg(arg);
@@ -193,6 +164,43 @@ impl Builder {
 
         let mut child = cmd.spawn()?;
         wait_spawn(&mut child)
+    }
+
+    fn write_docker_file<W: Write>(&self, ctx: &BuildContext, file: &mut W) -> Result<(), Error> {
+        writeln!(file, "FROM {}", ctx.build.from)?;
+
+        for script in &ctx.build.scripts {
+            let line = match script {
+                BuildScript::Run { run } => format!("RUN {}", run),
+                BuildScript::Arg { arg } => format!("ARG {}", arg),
+                BuildScript::WorkDir { workdir } => format!("WORKDIR {}", workdir),
+                BuildScript::Env { env } => format!("ENV {}", env),
+                BuildScript::Label { label } => format!("LABEL {}", label),
+                BuildScript::Expose { expose } => format!("EXPOSE {}", expose),
+                BuildScript::Add { add } => format!("ADD {}", add),
+                BuildScript::Copy { copy } => format!("COPY {}", copy),
+                BuildScript::Entrypoint { entrypoint } => format!("ENTRYPOINT {}", entrypoint),
+                BuildScript::Volume { volume } => format!("VOLUME {}", volume),
+                BuildScript::User { user } => format!("USER {}", user),
+                BuildScript::Cmd { cmd } => format!("CMD {}", cmd),
+                BuildScript::Maintainer { maintainer } => format!("MAINTAINER {}", maintainer),
+                BuildScript::OnBuild { onbuild } => format!("ONBUILD {}", onbuild),
+                BuildScript::StopSignal { stopsignal } => format!("STOPSIGNAL {}", stopsignal),
+                BuildScript::HealthCheck { healthcheck } => format!("HEALTHCHECK {}", healthcheck),
+                BuildScript::Shell { shell } => format!("SHELL {}", shell),
+                BuildScript::Import { import } => format!(
+                    "ADD {}/{}.tar /",
+                    relative_path(ctx.dir.path().parent().unwrap())?
+                        .to_str()
+                        .unwrap(),
+                    import
+                ),
+            };
+
+            write!(file, "{}\n", line)?;
+        }
+
+        Ok(())
     }
 
     fn save_last_layer(&self, ctx: &BuildContext) -> Result<(), Error> {

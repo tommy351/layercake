@@ -50,6 +50,11 @@ fn main() {
                 .long("no-cache")
                 .help("Do not use cache when building the image"),
         )
+        .arg(
+            Arg::with_name("dry-run")
+                .long("dry-run")
+                .help("Prints the content of Dockerfile without building images"),
+        )
         .get_matches();
 
     match run(args) {
@@ -92,6 +97,7 @@ fn run(args: ArgMatches) -> Result<(), failure::Error> {
         force_rm: args.is_present("force-rm"),
         pull: args.is_present("pull"),
         no_cache: args.is_present("no-cache"),
+        dry_run: args.is_present("dry-run"),
     };
 
     builder.build()
