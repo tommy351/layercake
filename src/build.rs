@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use tar::Archive;
 use tempfile::{NamedTempFile, TempDir};
@@ -38,16 +38,15 @@ pub struct Builder {
     pub pull: bool,
     pub no_cache: bool,
     pub dry_run: bool,
+    pub current_dir: PathBuf,
 }
 
 impl Builder {
     pub fn build(&self) -> Result<(), Error> {
-        info!("Start building images");
-
         let temp_dir = tempfile::Builder::new()
             .prefix(".layercake-tmp")
             .rand_bytes(0)
-            .tempdir_in(".")?;
+            .tempdir_in(&self.current_dir)?;
 
         let builds = self.sort_builds();
 
@@ -60,13 +59,13 @@ impl Builder {
             };
 
             if self.dry_run {
-                info!("Dockerfile");
+                info!("Dockerfile: {}", name);
                 self.write_docker_file(&ctx, &mut std::io::stdout())?;
             } else {
-                info!("Building the image");
+                info!("Building the image: {}", name);
                 self.build_image(&ctx)?;
 
-                info!("Saving the last layer");
+                info!("Saving the last layer: {}", name);
                 self.save_last_layer(&ctx)?;
             }
         }
@@ -157,7 +156,7 @@ impl Builder {
             cmd.arg("--build-arg").arg(format!("{}={}", k, v));
         }
 
-        cmd.arg(".");
+        cmd.arg(self.current_dir.as_os_str());
 
         let mut child = cmd.spawn()?;
         wait_spawn(&mut child)
@@ -187,7 +186,12 @@ impl Builder {
                 BuildScript::Shell { shell } => format!("SHELL {}", shell),
                 BuildScript::Import { import } => format!(
                     "ADD {}/{}.tar /",
-                    relative_path(ctx.dir.path().parent().unwrap())?
+                    ctx.dir
+                        .path()
+                        .parent()
+                        .unwrap()
+                        .strip_prefix(&self.current_dir)
+                        .unwrap()
                         .to_str()
                         .unwrap(),
                     import
@@ -245,8 +249,20 @@ fn wait_spawn(child: &mut Child) -> Result<(), Error> {
     }
 }
 
-fn relative_path(path: &Path) -> Result<&Path, Error> {
-    let pwd = std::env::current_dir()?;
-    let output = path.strip_prefix(pwd)?;
-    Ok(output)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    #[test]
+    fn test_wait_spawn_ok() {
+        let result = wait_spawn(&mut Command::new("ls").spawn().unwrap());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_wait_spawn_err() {
+        let result = wait_spawn(&mut Command::new("ls").arg("foo").spawn().unwrap());
+        assert!(result.is_err());
+    }
 }

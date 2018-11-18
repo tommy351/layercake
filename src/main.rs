@@ -9,6 +9,7 @@ use layercake::build::Builder;
 use layercake::config::load_config;
 use log::*;
 use simplelog::{Config, TermLogger};
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -40,12 +41,19 @@ struct Opt {
     dry_run: bool,
     #[structopt(long = "log-level", help = "Sets log level", default_value = "info")]
     log_level: LevelFilter,
+    #[structopt(long, help = "Sets current working directory")]
+    cwd: Option<String>,
 }
 
 fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
     TermLogger::init(opt.log_level, Config::default())?;
+
+    let cwd = opt.cwd.map_or_else(
+        || std::env::current_dir().expect("unable to get current dir"),
+        |cwd| PathBuf::from(cwd),
+    );
 
     let builder = Builder {
         config: load_config(opt.config_path)?,
@@ -55,6 +63,7 @@ fn main() -> Result<(), Error> {
         pull: opt.pull,
         no_cache: opt.no_cache,
         dry_run: opt.dry_run,
+        current_dir: cwd,
     };
 
     builder.build()
