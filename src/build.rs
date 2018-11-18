@@ -1,7 +1,7 @@
 use config::{Build, BuildScript, Config};
 use failure::{Error, Fail};
+use log::*;
 use serde_derive::{Deserialize, Serialize};
-use slog::{debug, info, o, Logger};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
@@ -27,12 +27,10 @@ struct BuildContext<'a> {
     build: &'a Build,
     dir: TempDir,
     tag: String,
-    log: Logger,
 }
 
 #[derive(Debug)]
 pub struct Builder {
-    pub log: Logger,
     pub config: Config,
     pub args: Vec<String>,
     pub compress: bool,
@@ -44,7 +42,7 @@ pub struct Builder {
 
 impl Builder {
     pub fn build(&self) -> Result<(), Error> {
-        info!(self.log, "Start building images");
+        info!("Start building images");
 
         let temp_dir = tempfile::Builder::new()
             .prefix(".layercake-tmp")
@@ -59,22 +57,21 @@ impl Builder {
                 build,
                 dir: TempDir::new_in(temp_dir.path())?,
                 tag: build.image.clone().unwrap_or(format!("layercake_{}", name)),
-                log: self.log.new(o!("name" => name.clone())),
             };
 
             if self.dry_run {
-                info!(ctx.log, "Dockerfile");
+                info!("Dockerfile");
                 self.write_docker_file(&ctx, &mut std::io::stdout())?;
             } else {
-                info!(ctx.log, "Building the image");
+                info!("Building the image");
                 self.build_image(&ctx)?;
 
-                info!(ctx.log, "Saving the last layer");
+                info!("Saving the last layer");
                 self.save_last_layer(&ctx)?;
             }
         }
 
-        info!(self.log, "Build successfully");
+        info!("Build successfully");
 
         Ok(())
     }
@@ -211,7 +208,7 @@ impl Builder {
             .spawn()?;
 
         {
-            debug!(ctx.log, "Unpacking the image");
+            debug!("Unpacking the image");
             let stdout = child.stdout.as_mut().unwrap();
             let mut archive = Archive::new(stdout);
             archive.unpack(ctx.dir.path())?;
@@ -229,7 +226,7 @@ impl Builder {
             .unwrap()
             .join(format!("{}.tar", ctx.name));
 
-        debug!(ctx.log, "Moving the layer");
+        debug!("Moving the layer");
         fs::rename(src, dst)?;
 
         wait_spawn(&mut child)

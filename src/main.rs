@@ -1,103 +1,60 @@
-extern crate clap;
+extern crate failure;
 extern crate layercake;
-extern crate slog;
-extern crate sloggers;
+extern crate log;
+extern crate simplelog;
+extern crate structopt;
 
-use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg, ArgMatches};
+use failure::Error;
 use layercake::build::Builder;
 use layercake::config::load_config;
-use slog::Logger;
+use log::*;
+use simplelog::{Config, TermLogger};
+use structopt::StructOpt;
 
-fn main() {
-    let args = App::new(crate_name!())
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about(crate_description!())
-        .arg(
-            Arg::with_name("config")
-                .short("c")
-                .long("config")
-                .value_name("FILE")
-                .help("Sets the path of the config file")
-                .default_value("layercake.yml")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("build-arg")
-                .long("build-arg")
-                .value_name("key=val")
-                .help("Sets build-time variables")
-                .multiple(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("compress")
-                .long("compress")
-                .help("Compresses the build context using gzip"),
-        )
-        .arg(
-            Arg::with_name("force-rm")
-                .long("force-rm")
-                .help("Always remove intermediate containers"),
-        )
-        .arg(
-            Arg::with_name("pull")
-                .long("pull")
-                .help("Always attempt to pull a newer version of the image"),
-        )
-        .arg(
-            Arg::with_name("no-cache")
-                .long("no-cache")
-                .help("Do not use cache when building the image"),
-        )
-        .arg(
-            Arg::with_name("dry-run")
-                .long("dry-run")
-                .help("Prints the content of Dockerfile without building images"),
-        )
-        .get_matches();
-
-    match run(args) {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("error: {:?}", e);
-            std::process::exit(1);
-        }
-    }
+#[derive(Debug, StructOpt)]
+struct Opt {
+    #[structopt(
+        short = "c",
+        long = "config",
+        default_value = "layercake.yml",
+        help = "Sets the path of the config file"
+    )]
+    config_path: String,
+    #[structopt(long = "build-arg", help = "Sets build-time variables")]
+    build_args: Vec<String>,
+    #[structopt(long, help = "Compresses the build context using gzip")]
+    compress: bool,
+    #[structopt(long = "force-rm", help = "Always remove intermediate containers")]
+    force_rm: bool,
+    #[structopt(
+        long = "pull",
+        help = "Always attempt to pull a newer version of the image"
+    )]
+    pull: bool,
+    #[structopt(long = "no-cache", help = "Do not use cache when building the image")]
+    no_cache: bool,
+    #[structopt(
+        long = "dry-run",
+        help = "Prints the content of Dockerfile without building images"
+    )]
+    dry_run: bool,
+    #[structopt(long = "log-level", help = "Sets log level", default_value = "info")]
+    log_level: LevelFilter,
 }
 
-fn create_logger() -> Logger {
-    use sloggers::terminal::{Destination, TerminalLoggerBuilder};
-    use sloggers::types::{Format, Severity, SourceLocation};
-    use sloggers::Build;
+fn main() -> Result<(), Error> {
+    let opt = Opt::from_args();
 
-    let mut builder = TerminalLoggerBuilder::new();
-    builder.format(Format::Full);
-    builder.level(Severity::Debug);
-    builder.destination(Destination::Stderr);
-    builder.source_location(SourceLocation::None);
-
-    builder.build().expect("failed to build a logger")
-}
-
-fn run(args: ArgMatches) -> Result<(), failure::Error> {
-    let config_path = args
-        .value_of("config")
-        .expect("failed to get config from arguments");
+    TermLogger::init(opt.log_level, Config::default())?;
 
     let builder = Builder {
-        log: create_logger(),
-        config: load_config(config_path.to_string())?,
-        args: args
-            .values_of("build-arg")
-            .unwrap_or_default()
-            .map(|s| s.to_string())
-            .collect(),
-        compress: args.is_present("compress"),
-        force_rm: args.is_present("force-rm"),
-        pull: args.is_present("pull"),
-        no_cache: args.is_present("no-cache"),
-        dry_run: args.is_present("dry-run"),
+        config: load_config(opt.config_path)?,
+        args: opt.build_args,
+        compress: opt.compress,
+        force_rm: opt.force_rm,
+        pull: opt.pull,
+        no_cache: opt.no_cache,
+        dry_run: opt.dry_run,
     };
 
     builder.build()

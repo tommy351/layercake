@@ -1,4 +1,5 @@
 use failure::Error;
+use log::*;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -42,6 +43,7 @@ pub enum BuildScript {
 }
 
 pub fn load_config(path: String) -> Result<Config, Error> {
+    debug!("Reading config from: {}", path);
     let file = File::open(path)?;
     let config: Config = serde_yaml::from_reader(file)?;
     Ok(config)
