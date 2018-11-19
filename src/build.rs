@@ -2,7 +2,7 @@ use config::{Build, BuildScript, Config};
 use failure::{Error, Fail};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -48,73 +48,81 @@ impl Builder {
             .rand_bytes(0)
             .tempdir_in(&self.current_dir)?;
 
-        let builds = self.sort_builds();
+        let dependency_map = (&self.config.build)
+            .into_iter()
+            .map(|(name, build)| {
+                (
+                    name,
+                    (&build.scripts)
+                        .into_iter()
+                        .filter_map(|ref script| match script {
+                            BuildScript::Import { import } => Some(import),
+                            _ => None,
+                        })
+                        .collect::<HashSet<_>>(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
-        for (name, build) in builds {
-            let ctx = BuildContext {
-                name: name.clone(),
-                build,
-                dir: TempDir::new_in(temp_dir.path())?,
-                tag: build.image.clone().unwrap_or(format!("layercake_{}", name)),
-            };
+        let dependant_map = (&self.config.build)
+            .into_iter()
+            .map(|(name, _)| {
+                (
+                    name,
+                    (&dependency_map)
+                        .into_iter()
+                        .filter(|(_, deps)| deps.contains(name))
+                        .map(|(&name, _)| name)
+                        .collect::<HashSet<_>>(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
-            if self.dry_run {
-                info!("Dockerfile: {}", name);
-                self.write_docker_file(&ctx, &mut std::io::stdout())?;
-            } else {
-                info!("Building the image: {}", name);
-                self.build_image(&ctx)?;
+        let mut done_builds: HashSet<&String> = HashSet::new();
 
-                info!("Saving the last layer: {}", name);
-                self.save_last_layer(&ctx)?;
+        while done_builds.len() != self.config.build.len() {
+            for (name, build) in &self.config.build {
+                if done_builds.contains(name) {
+                    continue;
+                }
+
+                let dependencies = dependency_map.get(name).unwrap();
+                let undone_deps = dependencies
+                    .into_iter()
+                    .filter(|x| !done_builds.contains(*x))
+                    .collect::<Vec<_>>();
+
+                if !undone_deps.is_empty() {
+                    debug!("Skip {} because it depends on: {:?}", name, undone_deps);
+                    continue;
+                }
+
+                let dependants = dependant_map.get(name).unwrap();
+                let ctx = BuildContext {
+                    name: name.clone(),
+                    build,
+                    dir: TempDir::new_in(temp_dir.path())?,
+                    tag: build.image.clone().unwrap_or(format!("layercake_{}", name)),
+                };
+
+                if self.dry_run {
+                    info!("Dockerfile: {}", name);
+                    self.write_docker_file(&ctx, &mut std::io::stdout())?;
+                } else {
+                    info!("Building the image: {}", name);
+                    self.build_image(&ctx)?;
+
+                    if !dependants.is_empty() {
+                        info!("Saving the last layer: {}", name);
+                        self.save_last_layer(&ctx)?;
+                    }
+                }
+
+                done_builds.insert(name);
             }
         }
 
-        info!("Build successfully");
-
         Ok(())
-    }
-
-    fn sort_builds(&self) -> Vec<(String, &Build)> {
-        let mut names: Vec<&String> = Vec::new();
-        let mut dep_map = (&self.config.build)
-            .into_iter()
-            .map(|(name, build)| (name, self.pick_build_deps(&build)))
-            .collect::<HashMap<_, _>>();
-
-        while !dep_map.is_empty() {
-            dep_map = dep_map
-                .into_iter()
-                .filter_map(|(name, deps)| {
-                    let new_deps = deps
-                        .into_iter()
-                        .filter(|dep| !names.contains(&dep))
-                        .collect::<Vec<_>>();
-
-                    if new_deps.is_empty() {
-                        names.push(name);
-                        None
-                    } else {
-                        Some((name, new_deps))
-                    }
-                })
-                .collect();
-        }
-
-        names
-            .into_iter()
-            .map(|name| (name.clone(), self.config.build.get(name).unwrap()))
-            .collect::<Vec<_>>()
-    }
-
-    fn pick_build_deps(&self, build: &Build) -> Vec<String> {
-        (&build.scripts)
-            .into_iter()
-            .filter_map(|ref script| match script {
-                BuildScript::Import { import } => Some(import.clone()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
     }
 
     fn build_image(&self, ctx: &BuildContext) -> Result<(), Error> {
@@ -246,23 +254,5 @@ fn wait_spawn(child: &mut Child) -> Result<(), Error> {
         Err(Error::from(BuildError::CommandExit {
             code: status.code().unwrap(),
         }))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::process::Command;
-
-    #[test]
-    fn test_wait_spawn_ok() {
-        let result = wait_spawn(&mut Command::new("ls").spawn().unwrap());
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_wait_spawn_err() {
-        let result = wait_spawn(&mut Command::new("ls").arg("foo").spawn().unwrap());
-        assert!(result.is_err());
     }
 }
