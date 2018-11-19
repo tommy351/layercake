@@ -1,13 +1,37 @@
 use failure::Error;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub build: HashMap<String, Build>,
+}
+
+impl Config {
+    pub fn find_dependencies(&self, name: &String) -> Option<HashSet<String>> {
+        self.build.get(name).map(|build| {
+            (&build.scripts)
+                .into_iter()
+                .filter_map(|ref script| match script {
+                    BuildScript::Import { import } => Some(import.clone()),
+                    _ => None,
+                })
+                .collect::<HashSet<_>>()
+        })
+    }
+
+    pub fn find_dependants(&self, name: &String) -> HashSet<String> {
+        (&self.build)
+            .keys()
+            .into_iter()
+            .filter(|&x| x != name)
+            .filter(|x| self.find_dependencies(x).unwrap().contains(name))
+            .map(|x| x.clone())
+            .collect::<HashSet<_>>()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

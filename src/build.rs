@@ -48,36 +48,6 @@ impl Builder {
             .rand_bytes(0)
             .tempdir_in(&self.current_dir)?;
 
-        let dependency_map = (&self.config.build)
-            .into_iter()
-            .map(|(name, build)| {
-                (
-                    name,
-                    (&build.scripts)
-                        .into_iter()
-                        .filter_map(|ref script| match script {
-                            BuildScript::Import { import } => Some(import),
-                            _ => None,
-                        })
-                        .collect::<HashSet<_>>(),
-                )
-            })
-            .collect::<HashMap<_, _>>();
-
-        let dependant_map = (&self.config.build)
-            .into_iter()
-            .map(|(name, _)| {
-                (
-                    name,
-                    (&dependency_map)
-                        .into_iter()
-                        .filter(|(_, deps)| deps.contains(name))
-                        .map(|(&name, _)| name)
-                        .collect::<HashSet<_>>(),
-                )
-            })
-            .collect::<HashMap<_, _>>();
-
         let mut done_builds: HashSet<&String> = HashSet::new();
 
         while done_builds.len() != self.config.build.len() {
@@ -86,10 +56,10 @@ impl Builder {
                     continue;
                 }
 
-                let dependencies = dependency_map.get(name).unwrap();
+                let dependencies = self.config.find_dependencies(name).unwrap();
                 let undone_deps = dependencies
                     .into_iter()
-                    .filter(|x| !done_builds.contains(*x))
+                    .filter(|x| !done_builds.contains(x))
                     .collect::<Vec<_>>();
 
                 if !undone_deps.is_empty() {
@@ -97,7 +67,6 @@ impl Builder {
                     continue;
                 }
 
-                let dependants = dependant_map.get(name).unwrap();
                 let ctx = BuildContext {
                     name: name.clone(),
                     build,
@@ -112,7 +81,10 @@ impl Builder {
                     info!("Building the image: {}", name);
                     self.build_image(&ctx)?;
 
+                    let dependants = self.config.find_dependants(name);
+
                     if !dependants.is_empty() {
+                        debug!("Save {} because it is depended by: {:?}", name, dependants);
                         info!("Saving the last layer: {}", name);
                         self.save_last_layer(&ctx)?;
                     }
