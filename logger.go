@@ -1,50 +1,27 @@
 package main
 
 import (
-	"time"
-
 	"github.com/ansel1/merry"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"github.com/sirupsen/logrus"
+	"github.com/x-cray/logrus-prefixed-formatter"
 )
 
-var logger = zap.NewNop()
+var logger = logrus.New()
 
 func initLogger() (err error) {
-	loggerConfig := zap.Config{
-		Encoding: "console",
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "time",
-			LevelKey:       "level",
-			NameKey:        "name",
-			CallerKey:      "caller",
-			MessageKey:     "msg",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeDuration: zapcore.StringDurationEncoder,
-		},
-		OutputPaths:      []string{"stderr"},
-		ErrorOutputPaths: []string{"stderr"},
-	}
+	formatter := &prefixed.TextFormatter{}
 
 	if globalOptions.Debug {
 		merry.SetVerboseDefault(true)
-		loggerConfig.Development = true
-		loggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-		loggerConfig.EncoderConfig.EncodeTime = logShortTimeEncoder
-		loggerConfig.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
+		logger.SetLevel(logrus.DebugLevel)
+		logger.SetReportCaller(true)
+		formatter.TimestampFormat = "15:04:05"
+		formatter.FullTimestamp = true
 	} else {
-		loggerConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		formatter.DisableTimestamp = true
 	}
 
-	if logger, err = loggerConfig.Build(); err != nil {
-		return
-	}
+	logger.SetFormatter(formatter)
 
 	return
-}
-
-func logShortTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(t.Format("15:04:05"))
 }

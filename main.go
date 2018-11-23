@@ -9,7 +9,7 @@ import (
 )
 
 type GlobalOptions struct {
-	Config string `long:"config" description:"Path to config file"`
+	Config string `long:"config" description:"Path to config file" value-name:"PATH"`
 	Debug  bool   `long:"debug" description:"Enable debug mode"`
 }
 
@@ -31,8 +31,6 @@ func main() {
 		if err = initLogger(); err != nil {
 			return
 		}
-
-		defer logger.Sync()
 
 		// Try to load the config
 		if err = initConfig(); err != nil {

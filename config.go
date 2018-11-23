@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 )
 
@@ -198,12 +197,9 @@ func LoadConfig(data []byte) (*Config, error) {
 }
 
 func LoadConfigFile(path string) (*Config, error) {
-	log := logger.With(zap.String("path", path))
-	log.Debug("Load config file")
 	data, err := ioutil.ReadFile(path)
 
 	if err != nil {
-		log.Error("Failed to load config file", zap.Error(err))
 		return nil, err
 	}
 
