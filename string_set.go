@@ -11,8 +11,10 @@ func (s StringSet) Contains(value string) bool {
 	return ok
 }
 
-func (s StringSet) Insert(value string) {
-	s[value] = true
+func (s StringSet) Insert(values ...string) {
+	for _, v := range values {
+		s[v] = true
+	}
 }
 
 func (s StringSet) Delete(value string) {
@@ -25,6 +27,10 @@ func (s StringSet) Range(fn func(value string) bool) {
 			break
 		}
 	}
+}
+
+func (s StringSet) Len() int {
+	return len(s)
 }
 
 type OrderedStringSet struct {
@@ -44,7 +50,13 @@ func (o *OrderedStringSet) Contains(value string) bool {
 	return ok
 }
 
-func (o *OrderedStringSet) Insert(value string) {
+func (o *OrderedStringSet) Insert(values ...string) {
+	for _, v := range values {
+		o.insert(v)
+	}
+}
+
+func (o *OrderedStringSet) insert(value string) {
 	if _, ok := o.m[value]; !ok {
 		o.m[value] = len(o.arr)
 		o.arr = append(o.arr, value)
@@ -80,4 +92,8 @@ func (o *OrderedStringSet) IndexOf(value string) int {
 	}
 
 	return -1
+}
+
+func (o *OrderedStringSet) Len() int {
+	return len(o.arr)
 }

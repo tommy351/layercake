@@ -14,6 +14,7 @@ import (
 
 	"github.com/ansel1/merry"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/sabhiram/go-gitignore"
 )
@@ -28,6 +29,7 @@ type BuildOptions struct {
 	CPUShares    int64             `long:"cpu-shares" description:"CPU shares (relative weight)"`
 	DryRun       bool              `long:"dry-run" description:"Print Dockerfile only"`
 	ForceRemove  bool              `long:"force-rm" description:"Always remove intermediate containers"`
+	Isolation    string            `long:"isolation" description:"Container isolation technology"`
 	Memory       int64             `long:"memory" description:"Memory limit"`
 	MemorySwap   int64             `long:"memory-swap" description:"Swap limit equal to memory plus swap: '-1' to enable unlimited swap"`
 	Network      string            `long:"network" description:" Set the networking mode for the RUN instructions during build" default:"default"`
@@ -288,6 +290,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		CgroupParent: b.CgroupParent,
 		NetworkMode:  b.Network,
 		SecurityOpt:  b.SecurityOpt,
+		Isolation:    container.Isolation(b.Isolation),
 		Dockerfile:   header.Name,
 		CacheFrom:    build.CacheFrom,
 		Labels:       build.Labels,

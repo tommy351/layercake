@@ -1,8 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -18,16 +22,7 @@ type Config struct {
 }
 
 func (c *Config) FindDependencies(name string) StringSet {
-	deps := NewStringSet()
-	build := c.Build[name]
-
-	for _, script := range build.Scripts {
-		if dep := script.Import; dep != "" {
-			deps.Insert(dep)
-		}
-	}
-
-	return deps
+	return c.Build[name].FindImports()
 }
 
 func (c *Config) FindDependants(name string) StringSet {
@@ -89,101 +84,133 @@ func (b BuildConfig) Dockerfile() string {
 	return strings.Join(lines, "\n")
 }
 
+func (b BuildConfig) FindImports() StringSet {
+	result := NewStringSet()
+
+	for _, script := range b.Scripts {
+		if s := script.Import; s != "" {
+			result.Insert(s)
+		}
+	}
+
+	return result
+}
+
 type BuildScript struct {
-	Run         string `yaml:"run"`
-	Arg         string `yaml:"arg"`
-	WorkDir     string `yaml:"workdir"`
-	Env         string `yaml:"env"`
-	Label       string `yaml:"label"`
-	Expose      string `yaml:"expose"`
-	Add         string `yaml:"add"`
-	Copy        string `yaml:"copy"`
-	Entrypoint  string `yaml:"entrypoint"`
-	Volume      string `yaml:"volume"`
-	User        string `yaml:"user"`
-	Cmd         string `yaml:"cmd"`
-	Maintainer  string `yaml:"maintainer"`
-	OnBuild     string `yaml:"onbuild"`
-	StopSignal  string `yaml:"stopsignal"`
-	HealthCheck string `yaml:"healthcheck"`
-	Shell       string `yaml:"shell"`
-	Import      string `yaml:"import"`
+	Raw         string
+	Instruction string
+	Value       string
+	Import      string
 }
 
 func (b BuildScript) Dockerfile() string {
-	if b.Run != "" {
-		return "RUN " + b.Run
-	}
-
-	if b.Arg != "" {
-		return "ARG " + b.Arg
-	}
-
-	if b.WorkDir != "" {
-		return "WORKDIR " + b.WorkDir
-	}
-
-	if b.Env != "" {
-		return "ENV " + b.Env
-	}
-
-	if b.Label != "" {
-		return "LABEL " + b.Label
-	}
-
-	if b.Expose != "" {
-		return "EXPOSE " + b.Expose
-	}
-
-	if b.Add != "" {
-		return "ADD " + b.Add
-	}
-
-	if b.Copy != "" {
-		return "COPY " + b.Copy
-	}
-
-	if b.Entrypoint != "" {
-		return "ENTRYPOINT " + b.Entrypoint
-	}
-
-	if b.Volume != "" {
-		return "VOLUME " + b.Volume
-	}
-
-	if b.User != "" {
-		return "USER " + b.User
-	}
-
-	if b.Cmd != "" {
-		return "CMD " + b.Cmd
-	}
-
-	if b.Maintainer != "" {
-		return "MAINTAINER " + b.Maintainer
-	}
-
-	if b.OnBuild != "" {
-		return "ONBUILD " + b.OnBuild
-	}
-
-	if b.StopSignal != "" {
-		return "STOPSIGNAL " + b.StopSignal
-	}
-
-	if b.HealthCheck != "" {
-		return "HEALTHCHECK " + b.HealthCheck
-	}
-
-	if b.Shell != "" {
-		return "sHELL " + b.Shell
+	if b.Raw != "" {
+		return b.Raw
 	}
 
 	if b.Import != "" {
 		return fmt.Sprintf("ADD %s/%s.tar /", layercakeBaseDir, b.Import)
 	}
 
-	return ""
+	return b.Instruction + " " + b.Value
+}
+
+func (b *BuildScript) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+
+	if err := unmarshal(&s); err == nil {
+		b.Raw = s
+		return nil
+	}
+
+	var m yaml.MapSlice
+
+	if err := unmarshal(&m); err != nil {
+		return err
+	}
+
+	if len(m) == 0 {
+		return errors.New("build script should be a string or a map")
+	}
+
+	item := m[0]
+	key, err := b.encode(item.Key)
+
+	if err != nil {
+		return err
+	}
+
+	key = strings.ToUpper(key)
+
+	if key == "IMPORT" {
+		b.Import = item.Value.(string)
+		return nil
+	}
+
+	value, err := b.encode(item.Value)
+
+	if err != nil {
+		return err
+	}
+
+	b.Instruction = key
+	b.Value = value
+
+	return nil
+}
+
+func (b BuildScript) encode(data interface{}) (string, error) {
+	if m, ok := data.(yaml.MapSlice); ok {
+		var result []string
+
+		for _, item := range m {
+			key, err := b.encode(item.Key)
+
+			if err != nil {
+				return "", err
+			}
+
+			value, err := b.encode(item.Value)
+
+			if err != nil {
+				return "", err
+			}
+
+			result = append(result, key+"="+strconv.Quote(value))
+		}
+
+		return strings.Join(result, " "), nil
+	}
+
+	v := reflect.ValueOf(data)
+
+	switch v.Kind() {
+	case reflect.String:
+		return v.String(), nil
+
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(v.Int(), 10), nil
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(v.Uint(), 10), nil
+
+	case reflect.Float64:
+		return strconv.FormatFloat(v.Float(), 'f', -1, 64), nil
+
+	case reflect.Bool:
+		return strconv.FormatBool(v.Bool()), nil
+
+	case reflect.Array, reflect.Slice:
+		result, err := json.Marshal(v.Interface())
+
+		if err != nil {
+			return "", err
+		}
+
+		return string(result), nil
+	}
+
+	return "", fmt.Errorf("unsupported type %T in build script", data)
 }
 
 func LoadConfig(data []byte) (*Config, error) {
