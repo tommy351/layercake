@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/ansel1/merry"
 	"github.com/docker/docker/api/types"
@@ -70,10 +69,10 @@ func init() {
 
 func (b *BuildOptions) Execute(args []string) error {
 	b.ctx = globalCtx
+	b.basePath = cwd
 	b.imgLayers = map[string][]byte{}
 
-	return runSeries(
-		b.setBasePath,
+	return RunSeries(
 		b.initClient,
 		b.loadIgnore,
 		b.buildBaseTar,
@@ -81,24 +80,8 @@ func (b *BuildOptions) Execute(args []string) error {
 	)
 }
 
-func (b *BuildOptions) setBasePath() (err error) {
-	b.basePath, err = os.Getwd()
-
-	if err != nil {
-		logger.Error("Failed to get the working directory")
-	}
-
-	return merry.Wrap(err)
-}
-
 func (b *BuildOptions) initClient() (err error) {
-	if b.client, err = client.NewClientWithOpts(); err != nil {
-		logger.Error("Failed to initialize a Docker client")
-		return merry.Wrap(err)
-	}
-
-	b.client.NegotiateAPIVersion(b.ctx)
-	logger.WithField("version", b.client.ClientVersion()).Debug("Docker client is initialized")
+	b.client, err = NewDockerClient(b.ctx)
 	return
 }
 
@@ -121,73 +104,18 @@ func (b *BuildOptions) loadIgnore() (err error) {
 }
 
 func (b *BuildOptions) buildBaseTar() error {
+	logger.Info("Building base context")
+
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
-	logger.Info("Building base context")
-
-	err := filepath.Walk(b.basePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		name := strings.TrimPrefix(filepath.ToSlash(strings.TrimPrefix(path, b.basePath)), "/")
-		log := logger.WithField("file", name)
-
-		// Determine if the path should be ignored
-		if info.IsDir() {
-			if b.ignore.MatchesPath(name + "/") {
-				return filepath.SkipDir
-			}
-
-			return nil
-		}
-
-		if b.ignore.MatchesPath(name) {
-			return nil
-		}
-
-		// Write the header
-		header := &tar.Header{
-			Name:    name,
-			Size:    info.Size(),
-			Mode:    int64(info.Mode()),
-			ModTime: info.ModTime(),
-		}
-
-		if err := tw.WriteHeader(header); err != nil {
-			log.Error("Failed to write the header")
-			return merry.Wrap(err)
-		}
-
-		// Copy the file
-		file, err := os.Open(path)
-
-		if err != nil {
-			log.Error("Failed to open the file")
-			return merry.Wrap(err)
-		}
-
-		defer file.Close()
-
-		written, err := io.Copy(tw, file)
-
-		if err != nil {
-			log.Error("Failed to copy the file to tar")
-			return merry.Wrap(err)
-		}
-
-		log.WithField("size", written).Debug("File is written to tar")
-		return nil
-	})
-
-	if err != nil {
-		logger.Error("Failed to walk the directory")
+	if err := TarAddDir(tw, b.basePath, b.ignore); err != nil {
+		logger.Error("Failed to build the base context")
 		return merry.Wrap(err)
 	}
 
 	if err := tw.Flush(); err != nil {
-		logger.Error("Failed to flush the tar writer")
+		logger.Error("Failed to flush the tar")
 		return merry.Wrap(err)
 	}
 
@@ -232,12 +160,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	}
 
 	// Write Dockerfile to tar
-	if err := tw.WriteHeader(header); err != nil {
-		log.Error("Failed to write the header")
-		return merry.Wrap(err)
-	}
-
-	if _, err := tw.Write(dockerFile); err != nil {
+	if _, err := TarAddFile(tw, header, bytes.NewReader(dockerFile)); err != nil {
 		log.Error("Failed to write Dockerfile to tar")
 		return merry.Wrap(err)
 	}
@@ -252,12 +175,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 			Size: int64(len(layer)),
 		}
 
-		if err = tw.WriteHeader(header); err != nil {
-			log.Error("Failed to write tar header")
-			return false
-		}
-
-		if _, err = tw.Write(layer); err != nil {
+		if _, err = TarAddFile(tw, header, bytes.NewReader(layer)); err != nil {
 			log.Error("Failed to write the layer to tar")
 			return false
 		}

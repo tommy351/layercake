@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ansel1/merry"
 	"gopkg.in/yaml.v2"
 )
 
@@ -243,16 +244,15 @@ func initConfig() (err error) {
 
 			// Return if config is loaded
 			if config != nil {
-				err = nil
-				return
+				return nil
 			}
 
 			// Return if the error is because of parsing
 			if err != os.ErrExist {
-				return
+				break
 			}
 		}
 	}
 
-	return
+	return merry.Wrap(err)
 }

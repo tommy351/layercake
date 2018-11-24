@@ -23,5 +23,5 @@ func initLogger() (err error) {
 
 	logger.SetFormatter(formatter)
 
-	return
+	return merry.Wrap(err)
 }
