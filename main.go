@@ -28,7 +28,7 @@ var (
 
 func main() {
 	parser.CommandHandler = func(command flags.Commander, args []string) error {
-		if err := RunSeries(initCWD, initLogger, initConfig); err != nil {
+		if err := RunSeries(initCWD, initLogger); err != nil {
 			return err
 		}
 

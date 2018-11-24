@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	config             *Config
 	defaultConfigPaths = []string{"layercake.yml", "layercake.yaml"}
+	errNoConfigFound   = merry.New("unable to find the config file")
 )
 
 type Config struct {
@@ -218,7 +218,7 @@ func (b BuildScript) encode(data interface{}) (string, error) {
 func LoadConfig(data []byte) (*Config, error) {
 	var conf Config
 
-	if err := yaml.Unmarshal(data, &conf); err != nil {
+	if err := yaml.UnmarshalStrict(data, &conf); err != nil {
 		return nil, err
 	}
 
@@ -235,24 +235,24 @@ func LoadConfigFile(path string) (*Config, error) {
 	return LoadConfig(data)
 }
 
-func initConfig() (err error) {
+func InitConfig() (*Config, error) {
 	if path := globalOptions.Config; path != "" {
-		config, err = LoadConfigFile(path)
+		return LoadConfigFile(path)
 	} else {
 		for _, path := range defaultConfigPaths {
-			config, err = LoadConfigFile(path)
+			config, err := LoadConfigFile(path)
 
 			// Return if config is loaded
 			if config != nil {
-				return nil
+				return config, nil
 			}
 
 			// Return if the error is because of parsing
-			if err != os.ErrExist {
-				break
+			if !os.IsNotExist(err) {
+				return nil, err
 			}
 		}
 	}
 
-	return merry.Wrap(err)
+	return nil, errNoConfigFound
 }

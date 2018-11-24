@@ -36,9 +36,10 @@ type BuildOptions struct {
 	SecurityOpt  []string          `long:"security-opt" description:"Security options"`
 
 	ctx       context.Context
-	client    *client.Client
+	client    client.ImageAPIClient
+	config    *Config
 	basePath  string
-	ignore    *ignore.GitIgnore
+	ignore    ignore.IgnoreParser
 	baseTar   []byte
 	imgLayers map[string][]byte
 }
@@ -85,6 +86,11 @@ func (b *BuildOptions) initClient() (err error) {
 	return
 }
 
+func (b *BuildOptions) initConfig() (err error) {
+	b.config, err = InitConfig()
+	return
+}
+
 func (b *BuildOptions) loadIgnore() (err error) {
 	path := filepath.Join(b.basePath, ".dockerignore")
 
@@ -125,8 +131,8 @@ func (b *BuildOptions) buildBaseTar() error {
 }
 
 func (b *BuildOptions) startBuild() (err error) {
-	config.SortBuilds().Range(func(name string, _ int) bool {
-		build := config.Build[name]
+	b.config.SortBuilds().Range(func(name string, _ int) bool {
+		build := b.config.Build[name]
 
 		if err = b.buildImage(name, &build); err != nil {
 			return false
@@ -168,7 +174,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	// Write dependency to tar
 	var err error
 
-	config.FindDependencies(name).Range(func(dep string) bool {
+	b.config.FindDependencies(name).Range(func(dep string) bool {
 		layer := b.imgLayers[dep]
 		header := &tar.Header{
 			Name: fmt.Sprintf("%s/%s.tar", layercakeBaseDir, dep),
@@ -267,7 +273,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 
 	log.WithField("id", imgID).Info("Image is built")
 
-	if len(config.FindDependants(name)) == 0 {
+	if len(b.config.FindDependants(name)) == 0 {
 		return nil
 	}
 

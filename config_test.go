@@ -232,11 +232,7 @@ build:
 	})
 
 	t.Run("Error", func(t *testing.T) {
-		config, err := LoadConfig([]byte(normalizeYAMLString(`
-build:
-	foo: 
-		args: 123
-`)))
+		config, err := LoadConfig([]byte("build: 123"))
 
 		assert.Error(t, err)
 		assert.Nil(t, config)
@@ -270,5 +266,72 @@ build:
 		config, err := LoadConfigFile("foo")
 		assert.Error(t, err)
 		assert.Nil(t, config)
+	})
+}
+
+func TestInitConfig(t *testing.T) {
+	content := []byte(normalizeYAMLString(`
+build:
+	foo: 
+		from: alpine
+		image: foo-alpine
+`))
+	expected := &Config{
+		Build: map[string]BuildConfig{
+			"foo": {
+				From:  "alpine",
+				Image: "foo-alpine",
+			},
+		},
+	}
+
+	t.Run("Specified config path", func(t *testing.T) {
+		t.Run("Success", func(t *testing.T) {
+			file, err := writeTempFile(content)
+			require.NoError(t, err)
+			defer os.Remove(file.Name())
+
+			globalOptions.Config = file.Name()
+			actual, err := InitConfig()
+			require.NoError(t, err)
+			assert.Equal(t, expected, actual)
+		})
+
+		t.Run("Error", func(t *testing.T) {
+			globalOptions.Config = "foo"
+			actual, err := InitConfig()
+			require.Error(t, err)
+			assert.Nil(t, actual)
+		})
+	})
+
+	t.Run("Default path", func(t *testing.T) {
+		globalOptions.Config = ""
+
+		for _, path := range defaultConfigPaths {
+			t.Run("Success: "+path, func(t *testing.T) {
+				require.NoError(t, ioutil.WriteFile(path, content, os.ModePerm))
+				defer os.Remove(path)
+
+				actual, err := InitConfig()
+				require.NoError(t, err)
+				assert.Equal(t, expected, actual)
+			})
+		}
+
+		t.Run("Parse failed", func(t *testing.T) {
+			require.NoError(t, ioutil.WriteFile("layercake.yml", []byte("build: 123"), os.ModePerm))
+			defer os.Remove("layercake.yml")
+
+			actual, err := InitConfig()
+			assert.Error(t, err)
+			assert.Nil(t, actual)
+		})
+
+		t.Run("Not found", func(t *testing.T) {
+			actual, err := InitConfig()
+			assert.Equal(t, errNoConfigFound, err)
+			assert.Nil(t, actual)
+		})
 	})
 }
