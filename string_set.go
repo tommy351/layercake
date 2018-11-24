@@ -77,7 +77,8 @@ func (o *OrderedStringSet) Delete(value string) {
 	if ok {
 		left := o.arr[0:idx]
 		right := o.arr[idx+1:]
-		o.arr = append(left, right...)
+		arr := append(left, right...)
+		o.arr = arr
 
 		// Delete the value from the map
 		delete(o.m, value)

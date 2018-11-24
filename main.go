@@ -19,12 +19,8 @@ var (
 	globalOptions GlobalOptions
 
 	globalCtx = newContext(context.Background())
-	parser    = flags.NewParser(nil, flags.HelpFlag|flags.PassDoubleDash)
+	parser    = flags.NewParser(&globalOptions, flags.HelpFlag|flags.PassDoubleDash)
 )
-
-func init() {
-	parser.AddGroup("Global Options", "", &globalOptions)
-}
 
 func main() {
 	parser.CommandHandler = func(command flags.Commander, args []string) (err error) {

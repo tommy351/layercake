@@ -16,7 +16,7 @@ func normalizeYAMLString(input string) string {
 	return strings.Replace(strings.TrimSpace(input), "\t", "  ", -1)
 }
 
-func writeTempFile(t *testing.T, content []byte) (*os.File, error) {
+func writeTempFile(content []byte) (*os.File, error) {
 	file, err := ioutil.TempFile("", "layercake")
 
 	if err != nil {
@@ -200,6 +200,8 @@ env:
 	}
 
 	for _, test := range tests {
+		test := test
+
 		t.Run(test.Name, func(t *testing.T) {
 			var actual BuildScript
 			err := yaml.Unmarshal([]byte(test.Input), &actual)
@@ -243,7 +245,7 @@ build:
 
 func TestLoadConfigFile(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		file, err := writeTempFile(t, []byte(normalizeYAMLString(`
+		file, err := writeTempFile([]byte(normalizeYAMLString(`
 build:
 	foo: 
 		from: alpine

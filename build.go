@@ -301,10 +301,12 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	}
 
 	for k, v := range b.BuildArgs {
+		v := v
 		options.BuildArgs[k] = &v
 	}
 
 	for k, v := range build.Args {
+		v := v
 		options.BuildArgs[k] = &v
 	}
 

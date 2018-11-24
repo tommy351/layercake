@@ -1,0 +1,9 @@
+linters:
+  enable-all: true
+  disable:
+    - gochecknoglobals
+    - gosec
+    - gochecknoinits
+    - lll
+    - maligned
+  fast: false
