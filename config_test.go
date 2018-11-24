@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,6 +14,89 @@ import (
 
 func normalizeYAMLString(input string) string {
 	return strings.Replace(strings.TrimSpace(input), "\t", "  ", -1)
+}
+
+func writeTempFile(t *testing.T, content []byte) (*os.File, error) {
+	file, err := ioutil.TempFile("", "layercake")
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+
+	if _, err := file.Write(content); err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func TestConfig_FindDependencies(t *testing.T) {
+	config := Config{
+		Build: map[string]BuildConfig{
+			"foo": {
+				Scripts: []BuildScript{
+					{Raw: "RUN foo"},
+					{Import: "a"},
+					{Import: "b"},
+					{Import: "a"},
+				},
+			},
+		},
+	}
+
+	expected := NewStringSet()
+	expected.Insert("a", "b")
+	assert.Equal(t, expected, config.FindDependencies("foo"))
+}
+
+func TestConfig_FindDependants(t *testing.T) {
+	config := Config{
+		Build: map[string]BuildConfig{
+			"a": {
+				Scripts: []BuildScript{
+					{Import: "foo"},
+				},
+			},
+			"b": {
+				Scripts: []BuildScript{
+					{Import: "bar"},
+				},
+			},
+			"c": {
+				Scripts: []BuildScript{
+					{Import: "foo"},
+				},
+			},
+		},
+	}
+
+	expected := NewStringSet()
+	expected.Insert("a", "c")
+	assert.Equal(t, expected, config.FindDependants("foo"))
+}
+
+func TestConfig_SortBuilds(t *testing.T) {
+	config := Config{
+		Build: map[string]BuildConfig{
+			"a": {
+				Scripts: []BuildScript{
+					{Import: "c"},
+				},
+			},
+			"b": {
+				Scripts: []BuildScript{
+					{Import: "a"},
+				},
+			},
+			"c": {},
+		},
+	}
+
+	expected := NewOrderedStringSet()
+	expected.Insert("c", "a", "b")
+	assert.Equal(t, expected, config.SortBuilds())
 }
 
 func TestBuildConfig_Dockerfile(t *testing.T) {
@@ -122,4 +207,66 @@ env:
 			assert.Equal(t, test.Expected, actual)
 		})
 	}
+}
+
+func TestLoadConfig(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		config, err := LoadConfig([]byte(normalizeYAMLString(`
+build:
+	foo: 
+		from: alpine
+		image: foo-alpine
+`)))
+
+		require.NoError(t, err)
+		assert.Equal(t, &Config{
+			Build: map[string]BuildConfig{
+				"foo": {
+					From:  "alpine",
+					Image: "foo-alpine",
+				},
+			},
+		}, config)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		config, err := LoadConfig([]byte(normalizeYAMLString(`
+build:
+	foo: 
+		args: 123
+`)))
+
+		assert.Error(t, err)
+		assert.Nil(t, config)
+	})
+}
+
+func TestLoadConfigFile(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		file, err := writeTempFile(t, []byte(normalizeYAMLString(`
+build:
+	foo: 
+		from: alpine
+		image: foo-alpine
+`)))
+		require.NoError(t, err)
+		defer os.Remove(file.Name())
+
+		config, err := LoadConfigFile(file.Name())
+		require.NoError(t, err)
+		assert.Equal(t, &Config{
+			Build: map[string]BuildConfig{
+				"foo": {
+					From:  "alpine",
+					Image: "foo-alpine",
+				},
+			},
+		}, config)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		config, err := LoadConfigFile("foo")
+		assert.Error(t, err)
+		assert.Nil(t, config)
+	})
 }

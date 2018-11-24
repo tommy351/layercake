@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -238,8 +239,16 @@ func initConfig() (err error) {
 		config, err = LoadConfigFile(path)
 	} else {
 		for _, path := range defaultConfigPaths {
-			if config, err = LoadConfigFile(path); config != nil {
+			config, err = LoadConfigFile(path)
+
+			// Return if config is loaded
+			if config != nil {
 				err = nil
+				return
+			}
+
+			// Return if the error is because of parsing
+			if err != os.ErrExist {
 				return
 			}
 		}
