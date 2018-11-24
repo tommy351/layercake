@@ -33,6 +33,14 @@ func (s StringSet) Len() int {
 	return len(s)
 }
 
+func (s StringSet) Slice() (result []string) {
+	for key := range s {
+		result = append(result, key)
+	}
+
+	return
+}
+
 type OrderedStringSet struct {
 	arr []string
 	m   map[string]int
@@ -67,11 +75,16 @@ func (o *OrderedStringSet) Delete(value string) {
 	idx, ok := o.m[value]
 
 	if ok {
-		o.m = map[string]int{}
-		o.arr = append(o.arr[0:idx], o.arr[idx+1:]...)
+		left := o.arr[0:idx]
+		right := o.arr[idx+1:]
+		o.arr = append(left, right...)
 
-		for i, v := range o.arr {
-			o.m[v] = i
+		// Delete the value from the map
+		delete(o.m, value)
+
+		// Update indices of values on right hand side
+		for i, v := range right {
+			o.m[v] = idx + i
 		}
 	}
 }
@@ -96,4 +109,8 @@ func (o *OrderedStringSet) IndexOf(value string) int {
 
 func (o *OrderedStringSet) Len() int {
 	return len(o.arr)
+}
+
+func (o *OrderedStringSet) Slice() []string {
+	return o.arr
 }
