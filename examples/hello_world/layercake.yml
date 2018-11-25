@@ -1,0 +1,12 @@
+build:
+  builder:
+    from: golang:alpine
+    scripts:
+      - workdir: /go/src/hello
+      - copy: . ./
+      - run: go build -o /usr/local/bin/hello .
+  app:
+    from: alpine
+    scripts:
+      - import: builder
+      - cmd: hello
