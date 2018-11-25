@@ -74,6 +74,7 @@ func (b *BuildOptions) Execute(args []string) error {
 	b.imgLayers = map[string][]byte{}
 
 	return RunSeries(
+		b.initConfig,
 		b.initClient,
 		b.loadIgnore,
 		b.buildBaseTar,
@@ -95,7 +96,7 @@ func (b *BuildOptions) loadIgnore() (err error) {
 	path := filepath.Join(b.basePath, ".dockerignore")
 
 	if b.ignore, err = ignore.CompileIgnoreFile(path); err != nil {
-		if err == os.ErrNotExist {
+		if os.IsNotExist(err) {
 			b.ignore = &ignore.GitIgnore{}
 			logger.Debug("Unable to find an ignore file")
 			return nil

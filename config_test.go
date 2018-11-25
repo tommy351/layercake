@@ -309,6 +309,7 @@ build:
 		globalOptions.Config = ""
 
 		for _, path := range defaultConfigPaths {
+			path := path
 			t.Run("Success: "+path, func(t *testing.T) {
 				require.NoError(t, ioutil.WriteFile(path, content, os.ModePerm))
 				defer os.Remove(path)

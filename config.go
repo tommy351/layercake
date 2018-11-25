@@ -238,19 +238,19 @@ func LoadConfigFile(path string) (*Config, error) {
 func InitConfig() (*Config, error) {
 	if path := globalOptions.Config; path != "" {
 		return LoadConfigFile(path)
-	} else {
-		for _, path := range defaultConfigPaths {
-			config, err := LoadConfigFile(path)
+	}
 
-			// Return if config is loaded
-			if config != nil {
-				return config, nil
-			}
+	for _, path := range defaultConfigPaths {
+		config, err := LoadConfigFile(path)
 
-			// Return if the error is because of parsing
-			if !os.IsNotExist(err) {
-				return nil, err
-			}
+		// Return if config is loaded
+		if config != nil {
+			return config, nil
+		}
+
+		// Return if the error is because of parsing
+		if !os.IsNotExist(err) {
+			return nil, err
 		}
 	}
 
