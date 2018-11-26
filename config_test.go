@@ -217,15 +217,16 @@ func TestLoadConfig(t *testing.T) {
 build:
 	foo: 
 		from: alpine
-		image: foo-alpine
+		tags: 
+			- foo-alpine
 `)))
 
 		require.NoError(t, err)
 		assert.Equal(t, &Config{
 			Build: map[string]BuildConfig{
 				"foo": {
-					From:  "alpine",
-					Image: "foo-alpine",
+					From: "alpine",
+					Tags: []string{"foo-alpine"},
 				},
 			},
 		}, config)
@@ -245,7 +246,8 @@ func TestLoadConfigFile(t *testing.T) {
 build:
 	foo: 
 		from: alpine
-		image: foo-alpine
+		tags: 
+			- foo-alpine
 `)))
 		require.NoError(t, err)
 		defer os.Remove(file.Name())
@@ -255,8 +257,8 @@ build:
 		assert.Equal(t, &Config{
 			Build: map[string]BuildConfig{
 				"foo": {
-					From:  "alpine",
-					Image: "foo-alpine",
+					From: "alpine",
+					Tags: []string{"foo-alpine"},
 				},
 			},
 		}, config)
@@ -274,13 +276,14 @@ func TestInitConfig(t *testing.T) {
 build:
 	foo: 
 		from: alpine
-		image: foo-alpine
+		tags: 
+			- foo-alpine
 `))
 	expected := &Config{
 		Build: map[string]BuildConfig{
 			"foo": {
-				From:  "alpine",
-				Image: "foo-alpine",
+				From: "alpine",
+				Tags: []string{"foo-alpine"},
 			},
 		},
 	}

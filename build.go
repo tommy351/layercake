@@ -219,10 +219,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		Dockerfile:   header.Name,
 		CacheFrom:    build.CacheFrom,
 		Labels:       build.Labels,
-	}
-
-	if img := build.Image; img != "" {
-		options.Tags = append(options.Tags, img)
+		Tags:         build.Tags,
 	}
 
 	for k, v := range b.BuildArgs {

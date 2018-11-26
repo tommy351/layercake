@@ -64,7 +64,9 @@ build:
     # Base image (required)
     from: alpine
     # Image tags (optional)
-    image: fooapp:tag
+    tags:
+      - fooapp:tag
+      - tommy351/fooapp:tag
     # Build arguments (optional)
     args:
       foo: bar

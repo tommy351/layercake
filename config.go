@@ -69,7 +69,7 @@ func (c *Config) SortBuilds() *OrderedStringSet {
 
 type BuildConfig struct {
 	From      string            `yaml:"from"`
-	Image     string            `yaml:"image"`
+	Tags      []string          `yaml:"tags"`
 	Args      map[string]string `yaml:"args"`
 	Scripts   []BuildScript     `yaml:"scripts"`
 	CacheFrom []string          `yaml:"cache_from"`
