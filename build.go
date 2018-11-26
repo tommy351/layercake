@@ -89,6 +89,10 @@ func (b *BuildOptions) Execute(args []string) error {
 }
 
 func (b *BuildOptions) initClient() (err error) {
+	if b.DryRun {
+		return
+	}
+
 	b.client, err = NewDockerClient(b.ctx)
 	return
 }
@@ -99,6 +103,10 @@ func (b *BuildOptions) initConfig() (err error) {
 }
 
 func (b *BuildOptions) loadIgnore() (err error) {
+	if b.DryRun {
+		return
+	}
+
 	path := filepath.Join(b.basePath, ".dockerignore")
 
 	if b.ignore, err = ignore.CompileIgnoreFile(path); err != nil {
@@ -117,6 +125,10 @@ func (b *BuildOptions) loadIgnore() (err error) {
 }
 
 func (b *BuildOptions) buildBaseTar() error {
+	if b.DryRun {
+		return nil
+	}
+
 	logger.Info("Building base context")
 
 	var buf bytes.Buffer
