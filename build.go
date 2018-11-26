@@ -79,8 +79,16 @@ func (b *BuildOptions) Execute(args []string) error {
 		b.onlyBuilds.Insert(args...)
 	}
 
+	if err := b.initConfig(); err != nil {
+		return err
+	}
+
+	if b.DryRun {
+		b.printDockerfiles()
+		return nil
+	}
+
 	return RunSeries(
-		b.initConfig,
 		b.initClient,
 		b.loadIgnore,
 		b.buildBaseTar,
@@ -89,10 +97,6 @@ func (b *BuildOptions) Execute(args []string) error {
 }
 
 func (b *BuildOptions) initClient() (err error) {
-	if b.DryRun {
-		return
-	}
-
 	b.client, err = NewDockerClient(b.ctx)
 	return
 }
@@ -103,10 +107,6 @@ func (b *BuildOptions) initConfig() (err error) {
 }
 
 func (b *BuildOptions) loadIgnore() (err error) {
-	if b.DryRun {
-		return
-	}
-
 	path := filepath.Join(b.basePath, ".dockerignore")
 
 	if b.ignore, err = ignore.CompileIgnoreFile(path); err != nil {
@@ -125,10 +125,6 @@ func (b *BuildOptions) loadIgnore() (err error) {
 }
 
 func (b *BuildOptions) buildBaseTar() error {
-	if b.DryRun {
-		return nil
-	}
-
 	logger.Info("Building base context")
 
 	var buf bytes.Buffer
@@ -183,14 +179,6 @@ func (b *BuildOptions) startBuild() (err error) {
 func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	log := logger.WithField("prefix", name)
 	dockerFile := []byte(build.Dockerfile())
-
-	// Dry run: only print Dockerfile
-	if b.DryRun {
-		log.Info("Dockerfile")
-		fmt.Println(string(dockerFile))
-		return nil
-	}
-
 	log.Info("Building the image")
 
 	// Build tar
@@ -372,4 +360,11 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	}
 
 	return nil
+}
+
+func (b *BuildOptions) printDockerfiles() {
+	for name, build := range b.config.Build {
+		logger.WithField("prefix", name).Info("Dockerfile")
+		fmt.Println(build.Dockerfile())
+	}
 }
