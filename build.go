@@ -35,13 +35,14 @@ type BuildOptions struct {
 	NoCache      bool      `long:"no-cache" description:"Do not use cache when building the image"`
 	SecurityOpt  []string  `long:"security-opt" description:"Security options"`
 
-	ctx       context.Context
-	client    client.ImageAPIClient
-	config    *Config
-	basePath  string
-	ignore    ignore.IgnoreParser
-	baseTar   []byte
-	imgLayers map[string][]byte
+	ctx        context.Context
+	client     client.ImageAPIClient
+	config     *Config
+	basePath   string
+	ignore     ignore.IgnoreParser
+	baseTar    []byte
+	imgLayers  map[string][]byte
+	onlyBuilds StringSet
 }
 
 type buildResponse struct {
@@ -72,6 +73,11 @@ func (b *BuildOptions) Execute(args []string) error {
 	b.ctx = globalCtx
 	b.basePath = cwd
 	b.imgLayers = map[string][]byte{}
+
+	if len(args) > 0 {
+		b.onlyBuilds = NewStringSet()
+		b.onlyBuilds.Insert(args...)
+	}
 
 	return RunSeries(
 		b.initConfig,
@@ -133,6 +139,23 @@ func (b *BuildOptions) buildBaseTar() error {
 
 func (b *BuildOptions) startBuild() (err error) {
 	b.config.SortBuilds().Range(func(name string, _ int) bool {
+		if b.onlyBuilds != nil {
+			skip := true
+
+			b.onlyBuilds.Range(func(value string) bool {
+				if name == value || b.config.FindDependencies(value).Contains(name) {
+					skip = false
+					return false
+				}
+
+				return true
+			})
+
+			if skip {
+				return true
+			}
+		}
+
 		build := b.config.Build[name]
 
 		if err = b.buildImage(name, &build); err != nil {
