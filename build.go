@@ -19,21 +19,21 @@ import (
 )
 
 type BuildOptions struct {
-	BuildArgs    map[string]string `long:"build-arg" description:"Set build-time variables"`
-	CgroupParent string            `long:"cgroup-parent" description:"Optional parent cgroup for the container"`
-	CPUPeriod    int64             `long:"cpu-period" description:"Limit the CPU CFS (Completely Fair Scheduler) period"`
-	CPUQuota     int64             `long:"cpu-quota" description:"Limit the CPU CFS (Completely Fair Scheduler) quota"`
-	CPUSetCPUs   string            `long:"cpuset-cpus" description:"CPUs in which to allow execution (0-3, 0,1)"`
-	CPUSetMems   string            `long:"cpuset-mems" description:"MEMs in which to allow execution (0-3, 0,1)"`
-	CPUShares    int64             `long:"cpu-shares" description:"CPU shares (relative weight)"`
-	DryRun       bool              `long:"dry-run" description:"Print Dockerfile only"`
-	ForceRemove  bool              `long:"force-rm" description:"Always remove intermediate containers"`
-	Isolation    string            `long:"isolation" description:"Container isolation technology"`
-	Memory       int64             `long:"memory" description:"Memory limit"`
-	MemorySwap   int64             `long:"memory-swap" description:"Swap limit equal to memory plus swap: '-1' to enable unlimited swap"`
-	Network      string            `long:"network" description:" Set the networking mode for the RUN instructions during build" default:"default"`
-	NoCache      bool              `long:"no-cache" description:"Do not use cache when building the image"`
-	SecurityOpt  []string          `long:"security-opt" description:"Security options"`
+	BuildArgs    []FlagMap `long:"build-arg" description:"Set build-time variables"`
+	CgroupParent string    `long:"cgroup-parent" description:"Optional parent cgroup for the container"`
+	CPUPeriod    int64     `long:"cpu-period" description:"Limit the CPU CFS (Completely Fair Scheduler) period"`
+	CPUQuota     int64     `long:"cpu-quota" description:"Limit the CPU CFS (Completely Fair Scheduler) quota"`
+	CPUSetCPUs   string    `long:"cpuset-cpus" description:"CPUs in which to allow execution (0-3, 0,1)"`
+	CPUSetMems   string    `long:"cpuset-mems" description:"MEMs in which to allow execution (0-3, 0,1)"`
+	CPUShares    int64     `long:"cpu-shares" description:"CPU shares (relative weight)"`
+	DryRun       bool      `long:"dry-run" description:"Print Dockerfile only"`
+	ForceRemove  bool      `long:"force-rm" description:"Always remove intermediate containers"`
+	Isolation    string    `long:"isolation" description:"Container isolation technology"`
+	Memory       int64     `long:"memory" description:"Memory limit"`
+	MemorySwap   int64     `long:"memory-swap" description:"Swap limit equal to memory plus swap: '-1' to enable unlimited swap"`
+	Network      string    `long:"network" description:" Set the networking mode for the RUN instructions during build" default:"default"`
+	NoCache      bool      `long:"no-cache" description:"Do not use cache when building the image"`
+	SecurityOpt  []string  `long:"security-opt" description:"Security options"`
 
 	ctx       context.Context
 	client    client.ImageAPIClient
@@ -222,9 +222,8 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		Tags:         build.Tags,
 	}
 
-	for k, v := range b.BuildArgs {
-		v := v
-		options.BuildArgs[k] = &v
+	for _, arg := range b.BuildArgs {
+		options.BuildArgs[arg.Key] = arg.Value
 	}
 
 	for k, v := range build.Args {
