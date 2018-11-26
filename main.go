@@ -29,8 +29,14 @@ var (
 	cwd           string
 
 	globalCtx = newContext(context.Background())
-	parser    = flags.NewParser(&globalOptions, flags.HelpFlag|flags.PassDoubleDash)
+	parser    = flags.NewNamedParser("layercake", flags.HelpFlag|flags.PassDoubleDash)
 )
+
+func init() {
+	if _, err := parser.AddGroup("Global Options", "", &globalOptions); err != nil {
+		panic(err)
+	}
+}
 
 func main() {
 	parser.CommandHandler = func(command flags.Commander, args []string) error {
