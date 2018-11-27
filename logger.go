@@ -11,15 +11,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const logKeyPrefix = "prefix"
+
+// nolint: gochecknoglobals
 var (
-	logger       = logrus.New()
-	logKeyPrefix = "prefix"
-	colorGray    = color.New(color.FgHiBlack)
-	colorDebug   = colorGray
-	colorWarn    = color.New(color.FgYellow)
-	colorInfo    = color.New(color.FgGreen)
-	colorError   = color.New(color.FgRed)
-	colorPrefix  = color.New(color.FgCyan, color.Bold)
+	logger      = logrus.New()
+	colorGray   = color.New(color.FgHiBlack)
+	colorDebug  = colorGray
+	colorWarn   = color.New(color.FgYellow)
+	colorInfo   = color.New(color.FgGreen)
+	colorError  = color.New(color.FgRed)
+	colorPrefix = color.New(color.FgCyan, color.Bold)
 )
 
 func initLogger() (err error) {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/ansel1/merry"
@@ -59,9 +60,9 @@ type imageManifest struct {
 	Layers   []string
 }
 
-var buildOptions BuildOptions
-
 func init() {
+	var buildOptions BuildOptions
+
 	_, err := parser.AddCommand("build", "Build images", "", &buildOptions)
 
 	if err != nil {
@@ -80,7 +81,7 @@ func (b *BuildOptions) Execute(args []string) error {
 	}
 
 	if err := b.initConfig(); err != nil {
-		return err
+		return merry.Wrap(err)
 	}
 
 	if b.DryRun {
@@ -185,7 +186,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	buf := bytes.NewBuffer(b.baseTar)
 	tw := tar.NewWriter(buf)
 	header := &tar.Header{
-		Name: layercakeBaseDir + "/Dockerfile",
+		Name: path.Join(layercakeBaseDir, "Dockerfile"),
 		Size: int64(len(dockerFile)),
 	}
 
@@ -201,7 +202,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	b.config.FindDependencies(name).Range(func(dep string) bool {
 		layer := b.imgLayers[dep]
 		header := &tar.Header{
-			Name: fmt.Sprintf("%s/%s.tar", layercakeBaseDir, dep),
+			Name: path.Join(layercakeBaseDir, dep+".tar"),
 			Size: int64(len(layer)),
 		}
 

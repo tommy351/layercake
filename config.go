@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// nolint: gochecknoglobals
 var (
 	defaultConfigPaths = []string{"layercake.yml", "layercake.yaml"}
 	errNoConfigFound   = merry.New("unable to find the config file")
@@ -69,6 +70,8 @@ func (c *Config) SortBuilds() *OrderedStringSet {
 
 func (c *Config) Validate() (err error) {
 	for name, build := range c.Build {
+		name := name
+
 		if build.From == "" {
 			return fmt.Errorf("build %q must have a base image", name)
 		}
@@ -100,6 +103,7 @@ type BuildConfig struct {
 }
 
 func (b BuildConfig) Dockerfile() string {
+	// nolint: gosec
 	lines := []string{"FROM " + b.From}
 
 	for _, script := range b.Scripts {

@@ -21,12 +21,14 @@ const (
 	layercakeBaseDir = ".layercake"
 )
 
+// nolint: gochecknoglobals
 var (
 	version = "dev"
 	commit  = "none"
 	date    = "unknown"
 )
 
+// nolint: gochecknoglobals
 var (
 	globalOptions GlobalOptions
 	cwd           string
