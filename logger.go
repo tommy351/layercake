@@ -14,7 +14,7 @@ import (
 var (
 	logger       = logrus.New()
 	logKeyPrefix = "prefix"
-	colorGray    = color.New(color.FgWhite)
+	colorGray    = color.New(color.FgHiBlack)
 	colorDebug   = colorGray
 	colorWarn    = color.New(color.FgYellow)
 	colorInfo    = color.New(color.FgGreen)
@@ -54,15 +54,18 @@ func (l *logFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	// Write timestamp
 	if l.ShowTimestamp {
-		buf.WriteString(colorGray.Sprint(entry.Time.Format(l.TimestampFormat)) + " ")
+		buf.WriteString(colorGray.Sprint(entry.Time.Format(l.TimestampFormat)))
+		buf.WriteByte(' ')
 	}
 
 	// Write level
-	buf.WriteString(c.Sprintf("%s", strings.ToUpper(entry.Level.String()[0:4])) + " ")
+	buf.WriteString(c.Sprint(strings.ToUpper(entry.Level.String()[0:4])))
+	buf.WriteByte(' ')
 
 	// Write prefix
 	if prefix, ok := entry.Data[logKeyPrefix]; ok {
-		buf.WriteString(colorPrefix.Sprintf("%s:", prefix) + " ")
+		buf.WriteString(colorPrefix.Sprintf("%s:", prefix))
+		buf.WriteByte(' ')
 	}
 
 	// Write message
@@ -81,10 +84,12 @@ func (l *logFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	// Print data
 	for _, k := range keys {
-		buf.WriteString(" " + c.Sprint(k))
+		buf.WriteByte(' ')
+		buf.WriteString(c.Sprint(k))
 
 		if v := l.formatValue(entry.Data[k]); v != "" {
-			buf.WriteString("=" + v)
+			buf.WriteByte('=')
+			buf.WriteString(v)
 		}
 	}
 
