@@ -11,3 +11,6 @@ test_examples/%: examples/$*
 
 check_generated:
 	go generate -v ./... && git diff --exit-code
+
+install.sh:
+	godownloader --repo tommy351/layercake -o $@

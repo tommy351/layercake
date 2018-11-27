@@ -10,13 +10,15 @@ Layercake is a command line tool for building complex Docker images. It can expo
 
 You can install Layercake with one of the methods below:
 
-### go get
+### Install Script
 
 ```sh
-go get -d github.com/tommy351/layercake
+curl -sL https://github.com/tommy351/layercake/raw/master/install.sh | sh
 ```
 
 ### Docker
+
+<https://hub.docker.com/r/tommy351/layercake/>
 
 ```sh
 docker run -it --rm \
@@ -24,6 +26,12 @@ docker run -it --rm \
   -v $(pwd):/src \
   -w /src \
   tommy351/layercake
+```
+
+### go get
+
+```sh
+go get -d github.com/tommy351/layercake
 ```
 
 ## Getting Started
