@@ -31,7 +31,7 @@ archive:
       format: zip
 
 checksum:
-  name_template: '{{ .ProjectName }}_checksums.txt'
+  name_template: '{{ .ProjectName }}-checksums.txt'
 
 changelog:
   sort: asc
@@ -42,7 +42,7 @@ changelog:
 
 dockers:
   - image_templates:
-      - 'tommy351/layercake:{{ .Tag }}'
       - 'tommy351/layercake:{{ .Major }}'
       - 'tommy351/layercake:{{ .Major }}.{{ .Minor }}'
+      - 'tommy351/layercake:{{ .Major }}.{{ .Minor }}.{{ .Patch }}'
       - 'tommy351/layercake:latest'
