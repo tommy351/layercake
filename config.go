@@ -67,6 +67,29 @@ func (c *Config) SortBuilds() *OrderedStringSet {
 	return result
 }
 
+func (c *Config) Validate() (err error) {
+	for name, build := range c.Build {
+		if build.From == "" {
+			return fmt.Errorf("build %q must have a base image", name)
+		}
+
+		build.FindImports().Range(func(key string) bool {
+			if _, ok := c.Build[key]; !ok {
+				err = fmt.Errorf("build %q contains undefined import %q", name, key)
+				return false
+			}
+
+			return true
+		})
+
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 type BuildConfig struct {
 	From      string            `yaml:"from"`
 	Tags      []string          `yaml:"tags"`
@@ -235,24 +258,34 @@ func LoadConfigFile(path string) (*Config, error) {
 	return LoadConfig(data)
 }
 
-func InitConfig() (*Config, error) {
+func InitConfig() (config *Config, err error) {
 	if path := globalOptions.Config; path != "" {
-		return LoadConfigFile(path)
+		config, err = LoadConfigFile(path)
+	} else {
+		for _, path := range defaultConfigPaths {
+			config, err = LoadConfigFile(path)
+
+			// Break if config is loaded
+			if config != nil {
+				break
+			}
+
+			// Break if the error is because of parsing
+			if !os.IsNotExist(err) {
+				break
+			}
+		}
 	}
 
-	for _, path := range defaultConfigPaths {
-		config, err := LoadConfigFile(path)
-
-		// Return if config is loaded
-		if config != nil {
-			return config, nil
-		}
-
-		// Return if the error is because of parsing
-		if !os.IsNotExist(err) {
-			return nil, err
+	if config != nil {
+		if err = config.Validate(); err == nil {
+			return
 		}
 	}
 
-	return nil, errNoConfigFound
+	if os.IsNotExist(err) {
+		err = errNoConfigFound
+	}
+
+	return
 }

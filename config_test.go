@@ -99,6 +99,51 @@ func TestConfig_SortBuilds(t *testing.T) {
 	assert.Equal(t, expected, config.SortBuilds())
 }
 
+func TestConfig_Validate(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		config := Config{
+			Build: map[string]BuildConfig{
+				"foo": {
+					From: "busybox",
+					Scripts: []BuildScript{
+						{Import: "bar"},
+					},
+				},
+				"bar": {
+					From: "busybox",
+				},
+			},
+		}
+
+		assert.NoError(t, config.Validate())
+	})
+
+	t.Run("No base image", func(t *testing.T) {
+		config := Config{
+			Build: map[string]BuildConfig{
+				"foo": {},
+			},
+		}
+
+		assert.Error(t, config.Validate())
+	})
+
+	t.Run("Undefined import", func(t *testing.T) {
+		config := Config{
+			Build: map[string]BuildConfig{
+				"foo": {
+					From: "busybox",
+					Scripts: []BuildScript{
+						{Import: "bar"},
+					},
+				},
+			},
+		}
+
+		assert.Error(t, config.Validate())
+	})
+}
+
 func TestBuildConfig_Dockerfile(t *testing.T) {
 	config := BuildConfig{
 		From: "alpine",
@@ -300,7 +345,7 @@ build:
 			assert.Equal(t, expected, actual)
 		})
 
-		t.Run("Error", func(t *testing.T) {
+		t.Run("Not found", func(t *testing.T) {
 			globalOptions.Config = "foo"
 			actual, err := InitConfig()
 			require.Error(t, err)
