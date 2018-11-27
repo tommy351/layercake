@@ -1,0 +1,48 @@
+project_name: layercake
+
+release:
+  github:
+    owner: tommy351
+    name: layercake
+
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+
+builds:
+  - binary: layercake
+    goos:
+      - darwin
+      - windows
+      - linux
+    goarch:
+      - amd64
+      - 386
+    env:
+      - CGO_ENABLED=0
+    main: .
+
+archive:
+  format: tar.gz
+  name_template: '{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+  format_overrides:
+    - goos: windows
+      format: zip
+
+checksum:
+  name_template: '{{ .ProjectName }}_checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+dockers:
+  - image_templates:
+      - 'tommy351/layercake:{{ .Tag }}'
+      - 'tommy351/layercake:{{ .Major }}'
+      - 'tommy351/layercake:{{ .Major }}.{{ .Minor }}'
+      - 'tommy351/layercake:latest'

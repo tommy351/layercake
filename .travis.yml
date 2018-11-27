@@ -1,16 +1,9 @@
 language: go
 
-go:
-  - 1.11.x
-  - master
+go: 1.11.x
 
 env:
   - GO111MODULE=on
-
-matrix:
-  allow_failures:
-    - go: master
-  fast_finish: true
 
 services:
   - docker
@@ -20,3 +13,13 @@ install:
 
 script:
   - make check_generated lint test test_examples/hello_world
+
+before_deploy:
+  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+deploy:
+  - provider: script
+    skip_cleanup: true
+    script: curl -sL https://git.io/goreleaser | bash
+    on:
+      tags: true

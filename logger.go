@@ -58,7 +58,7 @@ func (l *logFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	}
 
 	// Write level
-	buf.WriteString(c.Sprintf("%s", strings.ToUpper(entry.Level.String())) + " ")
+	buf.WriteString(c.Sprintf("%s", strings.ToUpper(entry.Level.String()[0:4])) + " ")
 
 	// Write prefix
 	if prefix, ok := entry.Data[logKeyPrefix]; ok {
