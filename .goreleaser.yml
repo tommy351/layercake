@@ -22,6 +22,7 @@ builds:
     env:
       - CGO_ENABLED=0
     main: .
+    ldflags: -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
 
 archive:
   format: tar.gz
@@ -42,7 +43,7 @@ changelog:
 
 dockers:
   - image_templates:
-      - 'tommy351/layercake:{{ .Major }}'
+      - 'tommy351/layercake:{{ .Version }}'
       - 'tommy351/layercake:{{ .Major }}.{{ .Minor }}'
-      - 'tommy351/layercake:{{ .Major }}.{{ .Minor }}.{{ .Patch }}'
+      - 'tommy351/layercake:{{ .Major }}'
       - 'tommy351/layercake:latest'
