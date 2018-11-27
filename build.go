@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/ansel1/merry"
 	"github.com/docker/docker/api/types"
@@ -36,14 +38,15 @@ type BuildOptions struct {
 	NoCache      bool      `long:"no-cache" description:"Do not use cache when building the image"`
 	SecurityOpt  []string  `long:"security-opt" description:"Security options"`
 
-	ctx        context.Context
-	client     client.ImageAPIClient
-	config     *Config
-	basePath   string
-	ignore     ignore.IgnoreParser
-	baseTar    []byte
-	imgLayers  map[string][]byte
-	onlyBuilds StringSet
+	ctx         context.Context
+	client      client.ImageAPIClient
+	config      *Config
+	basePath    string
+	ignore      ignore.IgnoreParser
+	onlyBuilds  StringSet
+	tempDir     string
+	baseTarPath string
+	layerPaths  map[string]string
 }
 
 type buildResponse struct {
@@ -73,7 +76,7 @@ func init() {
 func (b *BuildOptions) Execute(args []string) error {
 	b.ctx = globalCtx
 	b.basePath = cwd
-	b.imgLayers = map[string][]byte{}
+	b.layerPaths = map[string]string{}
 
 	if len(args) > 0 {
 		b.onlyBuilds = NewStringSet()
@@ -88,6 +91,15 @@ func (b *BuildOptions) Execute(args []string) error {
 		b.printDockerfiles()
 		return nil
 	}
+
+	tempDir, err := ioutil.TempDir("", "layercake")
+
+	if err != nil {
+		return merry.Wrap(err)
+	}
+
+	b.tempDir = tempDir
+	defer os.RemoveAll(tempDir)
 
 	return RunSeries(
 		b.initClient,
@@ -128,10 +140,18 @@ func (b *BuildOptions) loadIgnore() (err error) {
 func (b *BuildOptions) buildBaseTar() error {
 	logger.Info("Building base context")
 
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
+	b.baseTarPath = filepath.Join(b.tempDir, "base.tar")
+	file, err := os.Create(b.baseTarPath)
 
-	if err := TarAddDir(tw, b.basePath, b.ignore); err != nil {
+	if err != nil {
+		logger.Error("Failed to open a file")
+		return merry.Wrap(err)
+	}
+
+	tw := tar.NewWriter(file)
+	size, err := TarAddDir(tw, b.basePath, b.ignore)
+
+	if err != nil {
 		logger.Error("Failed to build the base context")
 		return merry.Wrap(err)
 	}
@@ -141,8 +161,7 @@ func (b *BuildOptions) buildBaseTar() error {
 		return merry.Wrap(err)
 	}
 
-	b.baseTar = buf.Bytes()
-	logger.WithField("size", buf.Len()).Info("Base context is built")
+	logger.WithField("size", size).Info("Base context is built")
 	return nil
 }
 
@@ -183,8 +202,17 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	log.Info("Building the image")
 
 	// Build tar
-	buf := bytes.NewBuffer(b.baseTar)
-	tw := tar.NewWriter(buf)
+	file, err := os.Open(b.baseTarPath)
+
+	if err != nil {
+		logger.Error("Failed to open the base tar")
+		return merry.Wrap(err)
+	}
+
+	defer file.Close()
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
 	header := &tar.Header{
 		Name: path.Join(layercakeBaseDir, "Dockerfile"),
 		Size: int64(len(dockerFile)),
@@ -197,17 +225,31 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	}
 
 	// Write dependency to tar
-	var err error
-
 	b.config.FindDependencies(name).Range(func(dep string) bool {
-		layer := b.imgLayers[dep]
-		header := &tar.Header{
-			Name: path.Join(layercakeBaseDir, dep+".tar"),
-			Size: int64(len(layer)),
+		var (
+			file *os.File
+			info os.FileInfo
+		)
+
+		if file, err = os.Open(filepath.Join(b.tempDir, b.layerPaths[dep])); err != nil {
+			err = merry.Wrap(err)
+			return false
 		}
 
-		if _, err = TarAddFile(tw, header, bytes.NewReader(layer)); err != nil {
-			log.Error("Failed to write the layer to tar")
+		defer file.Close()
+
+		if info, err = file.Stat(); err != nil {
+			err = merry.Wrap(err)
+			return false
+		}
+
+		header := &tar.Header{
+			Name: path.Join(layercakeBaseDir, dep+".tar"),
+			Size: info.Size(),
+		}
+
+		if _, err = TarAddFile(tw, header, file); err != nil {
+			err = merry.Wrap(err)
 			return false
 		}
 
@@ -215,6 +257,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	})
 
 	if err != nil {
+		log.Error("Failed to import layers to tar")
 		return merry.Wrap(err)
 	}
 
@@ -255,7 +298,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		options.BuildArgs[k] = &v
 	}
 
-	res, err := b.client.ImageBuild(b.ctx, buf, options)
+	res, err := b.client.ImageBuild(b.ctx, io.MultiReader(file, &buf), options)
 
 	if err != nil {
 		log.Error("Failed to build the image")
@@ -310,12 +353,8 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 
 	defer reader.Close()
 
-	var tarBuf bytes.Buffer
-	teeReader := io.TeeReader(reader, &tarBuf)
-
-	// First read: find manifest
 	var manifests []imageManifest
-	tr := tar.NewReader(teeReader)
+	tr := tar.NewReader(reader)
 
 	for {
 		header, err := tr.Next()
@@ -324,40 +363,57 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 			break
 		}
 
-		if header.Name != "manifest.json" {
-			continue
-		}
-
-		if err := json.NewDecoder(tr).Decode(&manifests); err != nil {
-			log.Error("Failed to parse the manifest")
-			return merry.Wrap(err)
+		if header.Name == "manifest.json" {
+			if manifests, err = b.decodeManifest(tr); err != nil {
+				log.Error("Failed to parse the manifest")
+				return merry.Wrap(err)
+			}
+		} else if strings.HasSuffix(header.Name, "/layer.tar") {
+			if err := b.saveLayer(header, tr); err != nil {
+				log.Error("Failed to save the layer")
+				return merry.Wrap(err)
+			}
 		}
 	}
 
-	// Second read: find the layer
-	tr = tar.NewReader(&tarBuf)
 	layers := manifests[0].Layers
-	lastLayer := layers[len(layers)-1]
 
-	for {
-		header, err := tr.Next()
-
-		if err == io.EOF {
-			break
-		}
-
-		if header.Name == lastLayer {
-			var layerBuf bytes.Buffer
-			written, err := io.Copy(&layerBuf, tr)
-
-			if err != nil {
-				log.Error("Failed to copy the layer")
+	for i, layer := range layers {
+		if i == len(layers)-1 {
+			b.layerPaths[name] = layer
+		} else {
+			if err := os.Remove(filepath.Join(b.tempDir, layer)); err != nil {
+				log.Error("Failed to remove unused layers")
 				return merry.Wrap(err)
 			}
-
-			b.imgLayers[name] = layerBuf.Bytes()
-			log.WithField("size", written).Debug("Layer is exported")
 		}
+	}
+
+	return nil
+}
+
+func (b *BuildOptions) decodeManifest(r io.Reader) (manifests []imageManifest, err error) {
+	err = merry.Wrap(json.NewDecoder(r).Decode(&manifests))
+	return
+}
+
+func (b *BuildOptions) saveLayer(header *tar.Header, r io.Reader) error {
+	path := filepath.Join(b.tempDir, header.Name)
+
+	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+		return merry.Wrap(err)
+	}
+
+	file, err := os.Create(path)
+
+	if err != nil {
+		return merry.Wrap(err)
+	}
+
+	defer file.Close()
+
+	if _, err := io.Copy(file, r); err != nil {
+		return merry.Wrap(err)
 	}
 
 	return nil

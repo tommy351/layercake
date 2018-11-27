@@ -108,7 +108,9 @@ func TestTarAddDir(t *testing.T) {
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	require.NoError(t, TarAddDir(tw, base, ignorePattern))
+	written, err := TarAddDir(tw, base, ignorePattern)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), written)
 
 	// Close tar
 	require.NoError(t, tw.Close())

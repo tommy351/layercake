@@ -20,8 +20,10 @@ func TarAddFile(tw *tar.Writer, header *tar.Header, r io.Reader) (int64, error) 
 	return written, merry.Wrap(err)
 }
 
-func TarAddDir(tw *tar.Writer, base string, ignoreParser ignore.IgnoreParser) error {
-	return filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+func TarAddDir(tw *tar.Writer, base string, ignoreParser ignore.IgnoreParser) (int64, error) {
+	var total int64
+
+	err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -65,7 +67,10 @@ func TarAddDir(tw *tar.Writer, base string, ignoreParser ignore.IgnoreParser) er
 			return merry.Wrap(err)
 		}
 
+		total += written
 		log.WithField("size", written).Debug("File is written to tar")
 		return nil
 	})
+
+	return total, err
 }
