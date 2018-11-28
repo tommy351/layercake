@@ -48,7 +48,7 @@ type BuildOptions struct {
 	onlyBuilds      StringSet
 	tempDir         string
 	baseTarPath     string
-	layerPaths      map[string]string
+	layerHeaders    map[string]*tar.Header
 }
 
 type imageManifest struct {
@@ -70,7 +70,7 @@ func init() {
 func (b *BuildOptions) Execute(args []string) error {
 	b.ctx = globalCtx
 	b.basePath = cwd
-	b.layerPaths = map[string]string{}
+	b.layerHeaders = map[string]*tar.Header{}
 
 	if len(args) > 0 {
 		b.onlyBuilds = NewStringSet()
@@ -238,31 +238,20 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 
 	// Write dependency to tar
 	b.config.FindDependencies(name).Range(func(dep string) bool {
-		var (
-			file *os.File
-			info os.FileInfo
-		)
+		var file *os.File
+		layer := b.layerHeaders[dep]
 
-		if file, err = os.Open(filepath.Join(b.tempDir, b.layerPaths[dep])); err != nil {
+		if file, err = os.Open(filepath.Join(b.tempDir, layer.Name)); err != nil {
 			err = merry.Wrap(err)
 			return false
 		}
 
 		defer file.Close()
 
-		if info, err = file.Stat(); err != nil {
-			err = merry.Wrap(err)
-			return false
-		}
+		header := *layer
+		header.Name = path.Join(layercakeBaseDir, dep+".tar")
 
-		header := &tar.Header{
-			Name:    path.Join(layercakeBaseDir, dep+".tar"),
-			Size:    info.Size(),
-			Mode:    int64(info.Mode()),
-			ModTime: info.ModTime(),
-		}
-
-		if _, err = TarAddFile(tw, header, file); err != nil {
+		if _, err = TarAddFile(tw, &header, file); err != nil {
 			err = merry.Wrap(err)
 			return false
 		}
@@ -352,6 +341,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 
 	var manifests []imageManifest
 	tr := tar.NewReader(reader)
+	tarHeaders := map[string]*tar.Header{}
 
 	for {
 		header, err := tr.Next()
@@ -359,6 +349,8 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		if err == io.EOF {
 			break
 		}
+
+		tarHeaders[header.Name] = header
 
 		if header.Name == "manifest.json" {
 			if manifests, err = b.decodeManifest(tr); err != nil {
@@ -377,7 +369,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 
 	for i, layer := range layers {
 		if i == len(layers)-1 {
-			b.layerPaths[name] = layer
+			b.layerHeaders[name] = tarHeaders[layer]
 		} else {
 			if err := os.Remove(filepath.Join(b.tempDir, layer)); err != nil {
 				log.Error("Failed to remove unused layers")
