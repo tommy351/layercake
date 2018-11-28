@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -17,8 +18,9 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/sabhiram/go-gitignore"
+	"github.com/docker/docker/pkg/term"
 )
 
 type BuildOptions struct {
@@ -38,15 +40,15 @@ type BuildOptions struct {
 	NoCache      bool      `long:"no-cache" description:"Do not use cache when building the image"`
 	SecurityOpt  []string  `long:"security-opt" description:"Security options"`
 
-	ctx         context.Context
-	client      client.ImageAPIClient
-	config      *Config
-	basePath    string
-	ignore      ignore.IgnoreParser
-	onlyBuilds  StringSet
-	tempDir     string
-	baseTarPath string
-	layerPaths  map[string]string
+	ctx             context.Context
+	client          client.ImageAPIClient
+	config          *Config
+	basePath        string
+	excludePatterns []string
+	onlyBuilds      StringSet
+	tempDir         string
+	baseTarPath     string
+	layerPaths      map[string]string
 }
 
 type buildAux struct {
@@ -115,22 +117,37 @@ func (b *BuildOptions) initConfig() (err error) {
 	return
 }
 
-func (b *BuildOptions) loadIgnore() (err error) {
+func (b *BuildOptions) loadIgnore() error {
 	path := filepath.Join(b.basePath, ".dockerignore")
+	file, err := os.Open(path)
 
-	if b.ignore, err = ignore.CompileIgnoreFile(path); err != nil {
+	if err != nil {
 		if os.IsNotExist(err) {
-			b.ignore = &ignore.GitIgnore{}
 			logger.Debug("Unable to find an ignore file")
 			return nil
 		}
 
-		logger.Error("Failed to load the ignore file")
+		logger.Error("Failed to open the ignore file")
+		return merry.Wrap(err)
+	}
+
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			b.excludePatterns = append(b.excludePatterns, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		logger.Error("Failed to scan the ignore file")
 		return merry.Wrap(err)
 	}
 
 	logger.Debug("Ignore file is loaded")
-	return
+	return nil
 }
 
 func (b *BuildOptions) buildBaseTar() error {
@@ -144,20 +161,26 @@ func (b *BuildOptions) buildBaseTar() error {
 		return merry.Wrap(err)
 	}
 
-	tw := tar.NewWriter(file)
-	size, err := TarAddDir(tw, b.basePath, b.ignore)
+	defer file.Close()
+
+	reader, err := archive.TarWithOptions(b.basePath, &archive.TarOptions{
+		Compression:     archive.Uncompressed,
+		ExcludePatterns: b.excludePatterns,
+	})
 
 	if err != nil {
 		logger.Error("Failed to build the base context")
 		return merry.Wrap(err)
 	}
 
-	if err := tw.Flush(); err != nil {
-		logger.Error("Failed to flush the tar")
+	written, err := io.Copy(file, reader)
+
+	if err != nil {
+		logger.Error("Failed to write the base context")
 		return merry.Wrap(err)
 	}
 
-	logger.WithField("size", size).Info("Base context is built")
+	logger.WithField("size", written).Info("Base context is built")
 	return nil
 }
 
@@ -257,8 +280,8 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		return merry.Wrap(err)
 	}
 
-	if err := tw.Close(); err != nil {
-		log.Error("Failed to close the tar")
+	if err := tw.Flush(); err != nil {
+		log.Error("Failed to flush the tar")
 		return merry.Wrap(err)
 	}
 
@@ -294,7 +317,7 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		options.BuildArgs[k] = &v
 	}
 
-	res, err := b.client.ImageBuild(b.ctx, io.MultiReader(file, &buf), options)
+	res, err := b.client.ImageBuild(b.ctx, io.MultiReader(&buf, file), options)
 
 	if err != nil {
 		log.Error("Failed to build the image")
@@ -304,7 +327,9 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	var imgID string
 	defer res.Body.Close()
 
-	err = jsonmessage.DisplayJSONMessagesStream(res.Body, os.Stdout, os.Stdout.Fd(), true, func(msg jsonmessage.JSONMessage) {
+	writer := os.Stdout
+	fd, isTerminal := term.GetFdInfo(writer)
+	err = jsonmessage.DisplayJSONMessagesStream(res.Body, writer, fd, isTerminal, func(msg jsonmessage.JSONMessage) {
 		if msg.Aux != nil {
 			var aux buildAux
 
