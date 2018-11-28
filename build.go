@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/sabhiram/go-gitignore"
 )
 
@@ -49,12 +49,8 @@ type BuildOptions struct {
 	layerPaths  map[string]string
 }
 
-type buildResponse struct {
-	Stream string `json:"stream"`
-	Aux    struct {
-		ID string `json:"ID"`
-	} `json:"aux"`
-	Error string `json:"error"`
+type buildAux struct {
+	ID string `json:"ID"`
 }
 
 type imageManifest struct {
@@ -306,32 +302,20 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	}
 
 	var imgID string
-	scanner := bufio.NewScanner(res.Body)
 	defer res.Body.Close()
 
-	for scanner.Scan() {
-		var res buildResponse
+	err = jsonmessage.DisplayJSONMessagesStream(res.Body, os.Stdout, os.Stdout.Fd(), true, func(msg jsonmessage.JSONMessage) {
+		if msg.Aux != nil {
+			var aux buildAux
 
-		if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
-			return merry.Wrap(err)
+			if err := json.Unmarshal(*msg.Aux, &aux); err == nil {
+				imgID = aux.ID
+			}
 		}
+	})
 
-		if id := res.Aux.ID; id != "" {
-			imgID = id
-		}
-
-		if s := res.Stream; s != "" {
-			fmt.Print(res.Stream)
-		}
-
-		if s := res.Error; s != "" {
-			log.Error("Failed to build the image")
-			return merry.New(s)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Error("Failed to scan the response")
+	if err != nil {
+		log.Error("Failed to display response")
 		return merry.Wrap(err)
 	}
 
