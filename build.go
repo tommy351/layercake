@@ -19,12 +19,11 @@ import (
 	"github.com/docker/docker/builder/dockerignore"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/docker/docker/pkg/term"
 )
 
 type BuildOptions struct {
 	BuildArgs    []FlagMap `long:"build-arg" description:"Set build-time variables"`
+	BuildKit     bool      `long:"build-kit" description:"Enable BuildKit (requires Docker 18.06+)" env:"DOCKER_BUILDKIT"`
 	CgroupParent string    `long:"cgroup-parent" description:"Optional parent cgroup for the container"`
 	CPUPeriod    int64     `long:"cpu-period" description:"Limit the CPU CFS (Completely Fair Scheduler) period"`
 	CPUQuota     int64     `long:"cpu-quota" description:"Limit the CPU CFS (Completely Fair Scheduler) quota"`
@@ -49,10 +48,6 @@ type BuildOptions struct {
 	tempDir         string
 	baseTarPath     string
 	layerPaths      map[string]string
-}
-
-type buildAux struct {
-	ID string `json:"ID"`
 }
 
 type imageManifest struct {
@@ -303,6 +298,10 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		Tags:         build.Tags,
 	}
 
+	if b.BuildKit {
+		options.Version = types.BuilderBuildKit
+	}
+
 	for _, arg := range b.BuildArgs {
 		options.BuildArgs[arg.Key] = arg.Value
 	}
@@ -319,20 +318,9 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		return merry.Wrap(err)
 	}
 
-	var imgID string
 	defer res.Body.Close()
 
-	writer := os.Stdout
-	fd, isTerminal := term.GetFdInfo(writer)
-	err = jsonmessage.DisplayJSONMessagesStream(res.Body, writer, fd, isTerminal, func(msg jsonmessage.JSONMessage) {
-		if msg.Aux != nil {
-			var aux buildAux
-
-			if err := json.Unmarshal(*msg.Aux, &aux); err == nil {
-				imgID = aux.ID
-			}
-		}
-	})
+	imgID, err := DisplayBuildStream(b.ctx, res.Body, os.Stdout, options.Version)
 
 	if err != nil {
 		log.Error("Failed to display response")
