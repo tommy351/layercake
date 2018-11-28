@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -17,6 +16,7 @@ import (
 	"github.com/ansel1/merry"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/builder/dockerignore"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/jsonmessage"
@@ -133,19 +133,14 @@ func (b *BuildOptions) loadIgnore() error {
 
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	patterns, err := dockerignore.ReadAll(file)
 
-	for scanner.Scan() {
-		if line := strings.TrimSpace(scanner.Text()); line != "" {
-			b.excludePatterns = append(b.excludePatterns, line)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error("Failed to scan the ignore file")
+	if err != nil {
+		logger.Error("Failed to read the ignore file")
 		return merry.Wrap(err)
 	}
 
+	b.excludePatterns = patterns
 	logger.Debug("Ignore file is loaded")
 	return nil
 }
