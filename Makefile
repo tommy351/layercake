@@ -7,7 +7,7 @@ test:
 test_examples: $(addprefix test_,$(wildcard examples/*))
 
 test_examples/%: examples/$*
-	cd examples/$* && go run ../.. build
+	cd examples/$* && go run ../.. build $(BUILD_OPTIONS)
 
 check_generated:
 	go generate -v ./... && git diff --exit-code
