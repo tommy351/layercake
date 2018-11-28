@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ansel1/merry"
 	"github.com/docker/docker/api/types"
@@ -223,8 +224,10 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	header := &tar.Header{
-		Name: path.Join(layercakeBaseDir, "Dockerfile"),
-		Size: int64(len(dockerFile)),
+		Name:    path.Join(layercakeBaseDir, "Dockerfile"),
+		Size:    int64(len(dockerFile)),
+		ModTime: time.Now(),
+		Mode:    0600,
 	}
 
 	// Write Dockerfile to tar
@@ -253,8 +256,10 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 		}
 
 		header := &tar.Header{
-			Name: path.Join(layercakeBaseDir, dep+".tar"),
-			Size: info.Size(),
+			Name:    path.Join(layercakeBaseDir, dep+".tar"),
+			Size:    info.Size(),
+			Mode:    int64(info.Mode()),
+			ModTime: info.ModTime(),
 		}
 
 		if _, err = TarAddFile(tw, header, file); err != nil {
