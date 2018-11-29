@@ -1,0 +1,6 @@
+build: false
+version: "{build}"
+stack: go 1.11
+
+test_script:
+  - go test -v ./...
