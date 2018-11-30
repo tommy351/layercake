@@ -1,6 +1,6 @@
 # Layercake
 
-[![Build Status](https://travis-ci.org/tommy351/layercake.svg?branch=master)](https://travis-ci.org/tommy351/layercake) [![Build status](https://ci.appveyor.com/api/projects/status/633jdcuxr61er2yx/branch/master?svg=true)](https://ci.appveyor.com/project/tommy351/layercake/branch/master
+[![Build Status](https://travis-ci.org/tommy351/layercake.svg?branch=master)](https://travis-ci.org/tommy351/layercake) [![Build status](https://ci.appveyor.com/api/projects/status/633jdcuxr61er2yx/branch/master?svg=true)](https://ci.appveyor.com/project/tommy351/layercake/branch/master) [![codecov](https://codecov.io/gh/tommy351/layercake/branch/master/graph/badge.svg)](https://codecov.io/gh/tommy351/layercake)
 
 Layercake is a command line tool for building complex Docker images. It can export layers from  images and import them to other images easily. It's useful when you are trying to build some images with many dependencies.
 
