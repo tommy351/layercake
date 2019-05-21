@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/term"
-	"github.com/moby/buildkit/api/services/control"
+	buildkit "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"golang.org/x/sync/errgroup"
@@ -108,7 +108,7 @@ func parseBuildKitTrace(msg *jsonmessage.JSONMessage) (*client.SolveStatus, erro
 		return nil, err
 	}
 
-	var resp moby_buildkit_v1.StatusResponse
+	var resp buildkit.StatusResponse
 
 	if err := resp.Unmarshal(data); err != nil {
 		return nil, err

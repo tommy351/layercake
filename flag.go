@@ -7,6 +7,7 @@ type FlagMap struct {
 	Value *string
 }
 
+// nolint: unparam
 func (f *FlagMap) UnmarshalFlag(value string) error {
 	parts := strings.SplitN(value, "=", 2)
 	f.Key = parts[0]

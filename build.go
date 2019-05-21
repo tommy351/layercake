@@ -370,11 +370,9 @@ func (b *BuildOptions) buildImage(name string, build *BuildConfig) error {
 	for i, layer := range layers {
 		if i == len(layers)-1 {
 			b.layerHeaders[name] = tarHeaders[layer]
-		} else {
-			if err := os.Remove(filepath.Join(b.tempDir, layer)); err != nil {
-				log.Error("Failed to remove unused layers")
-				return merry.Wrap(err)
-			}
+		} else if err := os.Remove(filepath.Join(b.tempDir, layer)); err != nil {
+			log.Error("Failed to remove unused layers")
+			return merry.Wrap(err)
 		}
 	}
 
