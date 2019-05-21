@@ -2,59 +2,49 @@ module github.com/tommy351/layercake
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
-	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/Microsoft/go-winio v0.4.11 // indirect
-	github.com/Microsoft/hcsshim v0.8.2 // indirect
-	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
-	github.com/ansel1/merry v1.3.1
-	github.com/containerd/cgroups v0.0.0-20181121184837-c0437c3dd595 // indirect
+	github.com/Microsoft/hcsshim v0.8.6 // indirect
+	github.com/ansel1/merry v1.4.0
+	github.com/containerd/cgroups v0.0.0-20190517134515-fc51a4cd6306 // indirect
 	github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
-	github.com/containerd/containerd v1.2.0 // indirect
-	github.com/containerd/continuity v0.0.0-20181027224239-bea7585dbfac // indirect
-	github.com/containerd/cri v1.11.1 // indirect
-	github.com/containerd/fifo v0.0.0-20180307165137-3d5202aec260 // indirect
-	github.com/containerd/typeurl v0.0.0-20181015155603-461401dc8f19 // indirect
-	github.com/coreos/go-systemd v0.0.0-20181031085051-9002847aa142 // indirect
-	github.com/docker/distribution v2.7.0-rc.0+incompatible // indirect
-	github.com/docker/docker v0.7.3-0.20181120042309-04287e493468
+	github.com/containerd/fifo v0.0.0-20190226154929-a9fb20d87448 // indirect
+	github.com/containerd/ttrpc v0.0.0-20190513141551-f82148331ad2 // indirect
+	github.com/containerd/typeurl v0.0.0-20190515163108-7312978f2987 // indirect
+	github.com/docker/distribution v2.7.1+incompatible // indirect
+	github.com/docker/docker v1.14.0-0.20190319215453-e7b5f7dbe98c
 	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/docker/go-events v0.0.0-20170721190031-9461782956ad // indirect
-	github.com/docker/go-units v0.3.3 // indirect
+	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fatih/color v1.7.0
-	github.com/godbus/dbus v4.1.0+incompatible // indirect
-	github.com/gogo/googleapis v1.1.0 // indirect
-	github.com/gogo/protobuf v1.1.1 // indirect
-	github.com/google/go-cmp v0.2.0 // indirect
+	github.com/gofrs/flock v0.7.1 // indirect
+	github.com/gogo/googleapis v1.2.0 // indirect
+	github.com/google/go-cmp v0.3.0 // indirect
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf // indirect
-	github.com/gorilla/context v1.1.1 // indirect
-	github.com/gorilla/mux v1.6.2 // indirect
-	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
+	github.com/gorilla/mux v1.7.2 // indirect
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/mattn/go-colorable v0.0.9 // indirect
-	github.com/mattn/go-isatty v0.0.4 // indirect
-	github.com/moby/buildkit v0.3.3
-	github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c // indirect
-	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
-	github.com/opencontainers/image-spec v1.0.1 // indirect
-	github.com/opencontainers/runc v0.1.1 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
+	github.com/mattn/go-colorable v0.1.1 // indirect
+	github.com/mattn/go-isatty v0.0.7 // indirect
+	github.com/moby/buildkit v0.5.1
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
-	github.com/opentracing/opentracing-go v1.0.2 // indirect
-	github.com/pkg/errors v0.8.0 // indirect
-	github.com/sirupsen/logrus v1.2.0
-	github.com/stretchr/testify v1.2.2
-	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
-	github.com/tonistiigi/fsutil v0.0.0-20181030174853-11b4bc7505e4 // indirect
-	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
-	golang.org/x/crypto v0.0.0-20181112202954-3d3f9f413869 // indirect
-	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
-	golang.org/x/sys v0.0.0-20181119195503-ec83556a53fe // indirect
-	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c // indirect
-	google.golang.org/genproto v0.0.0-20181109154231-b5d43981345b // indirect
-	gopkg.in/yaml.v2 v2.2.1
-	gotest.tools v2.2.0+incompatible // indirect
+	github.com/opentracing/opentracing-go v1.1.0 // indirect
+	github.com/prometheus/procfs v0.0.0-20190519111021-9935e8e0588d // indirect
+	github.com/sirupsen/logrus v1.4.2
+	github.com/stretchr/testify v1.3.0
+	github.com/tonistiigi/fsutil v0.0.0-20190403235420-524c23dab726 // indirect
+	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f // indirect
+	golang.org/x/net v0.0.0-20190520210107-018c4d40a106 // indirect
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	golang.org/x/sys v0.0.0-20190520201301-c432e742b0af // indirect
+	golang.org/x/text v0.3.2 // indirect
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
+	google.golang.org/appengine v1.4.0 // indirect
+	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
+	google.golang.org/grpc v1.20.1 // indirect
+	gopkg.in/yaml.v2 v2.2.2
 )
 
-replace github.com/hashicorp/go-immutable-radix => github.com/tonistiigi/go-immutable-radix v0.0.0-20170803185627-826af9ccf0fe
-
-replace github.com/Nvveen/Gotty => github.com/ijc25/Gotty v0.0.0-20170406111628-a8b993ba6abd
+replace (
+	github.com/Nvveen/Gotty => github.com/ijc25/Gotty v0.0.0-20170406111628-a8b993ba6abd
+	github.com/golang/lint v0.0.0-20190409202823-959b441ac422 => github.com/golang/lint v0.0.0-20190409202823-5614ed5bae6fb75893070bdc0996a68765fdd275
+	github.com/hashicorp/go-immutable-radix => github.com/tonistiigi/go-immutable-radix v0.0.0-20170803185627-826af9ccf0fe
+	github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
+)
