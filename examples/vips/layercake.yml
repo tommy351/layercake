@@ -1,41 +1,42 @@
 build:
-  mozjpeg:
-    from: debian:stretch
-    scripts:
-      - run: apt-get update -y
-      - run: apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
-      - run: apt-get install -y --no-install-recommends autoconf automake libtool nasm
-      - env:
-          MOZJPEG_VERSION: 3.3.1
-      - run: curl -L https://github.com/mozilla/mozjpeg/archive/v${MOZJPEG_VERSION}.tar.gz | tar -xzC /tmp
-      - workdir: /tmp/mozjpeg-${MOZJPEG_VERSION}
-      - run: autoreconf -fiv && ./configure --prefix=/usr
-      - run: make -j$(nproc)
-      - run: make install
-  imagequant:
-    from: debian:stretch
-    scripts:
-      - run: apt-get update -y
-      - run: apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
-      - env:
-          IMAGEQUANT_VERSION: 2.12.1
-      - run: curl -L https://github.com/ImageOptim/libimagequant/archive/${IMAGEQUANT_VERSION}.tar.gz | tar -xzC /tmp
-      - workdir: /tmp/libimagequant-${IMAGEQUANT_VERSION}
-      - run: ./configure --prefix=/usr
-      - run: make -j$(nproc)
-      - run: make install
-  vips:
-    from: debian:stretch
-    scripts:
-      - run: apt-get update -y
-      - run: apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
-      - run: apt-get install -y --no-install-recommends glib2.0-dev libexpat1-dev libgsf-1-dev libwebp-dev libpng-dev libexif-dev libfftw3-dev liblcms2-dev libgif-dev libtiff5-dev liborc-0.4-dev
-      - import: mozjpeg
-      - import: imagequant
-      - env:
-          VIPS_VERSION: 8.7.0
-      - run: curl -L https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.gz | tar -xzC /tmp
-      - workdir: /tmp/vips-${VIPS_VERSION}
-      - run: ./configure --prefix=/usr/local --enable-silent-rules
-      - run: make -j$(nproc)
-      - run: make install
+  images:
+    mozjpeg:
+      from: debian:stretch
+      scripts:
+        - run: apt-get update -y
+        - run: apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
+        - run: apt-get install -y --no-install-recommends autoconf automake libtool nasm
+        - env:
+            MOZJPEG_VERSION: 3.3.1
+        - run: curl -L https://github.com/mozilla/mozjpeg/archive/v${MOZJPEG_VERSION}.tar.gz | tar -xzC /tmp
+        - workdir: /tmp/mozjpeg-${MOZJPEG_VERSION}
+        - run: autoreconf -fiv && ./configure --prefix=/usr
+        - run: make -j$(nproc)
+        - run: make install
+    imagequant:
+      from: debian:stretch
+      scripts:
+        - run: apt-get update -y
+        - run: apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
+        - env:
+            IMAGEQUANT_VERSION: 2.12.1
+        - run: curl -L https://github.com/ImageOptim/libimagequant/archive/${IMAGEQUANT_VERSION}.tar.gz | tar -xzC /tmp
+        - workdir: /tmp/libimagequant-${IMAGEQUANT_VERSION}
+        - run: ./configure --prefix=/usr
+        - run: make -j$(nproc)
+        - run: make install
+    vips:
+      from: debian:stretch
+      scripts:
+        - run: apt-get update -y
+        - run: apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config
+        - run: apt-get install -y --no-install-recommends glib2.0-dev libexpat1-dev libgsf-1-dev libwebp-dev libpng-dev libexif-dev libfftw3-dev liblcms2-dev libgif-dev libtiff5-dev liborc-0.4-dev
+        - import: mozjpeg
+        - import: imagequant
+        - env:
+            VIPS_VERSION: 8.7.0
+        - run: curl -L https://github.com/libvips/libvips/releases/download/v${VIPS_VERSION}/vips-${VIPS_VERSION}.tar.gz | tar -xzC /tmp
+        - workdir: /tmp/vips-${VIPS_VERSION}
+        - run: ./configure --prefix=/usr/local --enable-silent-rules
+        - run: make -j$(nproc)
+        - run: make install

@@ -1,7 +1,5 @@
 linters:
   enable-all: true
   disable:
-    - gochecknoinits
     - lll
-    - maligned
   fast: false
