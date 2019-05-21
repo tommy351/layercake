@@ -8,7 +8,6 @@ release:
 before:
   hooks:
     - go mod download
-    - go generate ./...
 
 builds:
   - binary: layercake
@@ -18,11 +17,9 @@ builds:
       - linux
     goarch:
       - amd64
-      - 386
     env:
       - CGO_ENABLED=0
     main: .
-    ldflags: -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
 
 archive:
   format: tar.gz
@@ -38,6 +35,7 @@ changelog:
   sort: asc
   filters:
     exclude:
+      - '^ci:'
       - '^docs:'
       - '^test:'
 
