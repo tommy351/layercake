@@ -19,7 +19,7 @@ builds:
       - amd64
     env:
       - CGO_ENABLED=0
-    main: .
+    main: ./cmd/layercake
 
 archive:
   format: tar.gz

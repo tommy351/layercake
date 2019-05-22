@@ -68,38 +68,39 @@ The following is an example of a config file.
 # You don't have to sort the builds by their dependencies. Layercake resolves
 # dependencies and builds images in order.
 build:
-  foo:
-    # Base image (required)
-    from: alpine
-    # Image tags (optional)
-    tags:
-      - fooapp:tag
-      - tommy351/fooapp:tag
-    # Build arguments (optional)
-    args:
-      foo: bar
-    # A list of images used for cache resolution (optional)
-    cache_from:
-      - alpine
-    # Image labels (optional)
-    labels:
-      foo: bar
-    # Build scripts (required)
-    # Just like Dockerfile
-    scripts:
-      # You can use a string
-      - RUN echo hello
-      # Or a map
-      - run: echo hello
-      # The value can be any type
-      - env:
-          VERSION: 1.2.3
-      # Import other layers from other builds
-      - import: bar
-  bar:
-    from: busybox
-    scripts:
-      - run: echo bar
+  images:
+    foo:
+      # Base image (required)
+      from: alpine
+      # Image tags (optional)
+      tags:
+        - fooapp:tag
+        - tommy351/fooapp:tag
+      # Build arguments (optional)
+      args:
+        foo: bar
+      # A list of images used for cache resolution (optional)
+      cache_from:
+        - alpine
+      # Image labels (optional)
+      labels:
+        foo: bar
+      # Build scripts (required)
+      # Just like Dockerfile
+      scripts:
+        # You can use a string
+        - RUN echo hello
+        # Or a map
+        - run: echo hello
+        # The value can be any type
+        - env:
+            VERSION: 1.2.3
+        # Import other layers from other builds
+        - import: bar
+    bar:
+      from: busybox
+      scripts:
+        - run: echo bar
 ```
 
 ## FAQ
